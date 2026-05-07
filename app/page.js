@@ -832,25 +832,6 @@ export default function BarcodeQrGeneratorApp() {
                     </div>
                   )}
                 </div>
-
-                <div className="grid shrink-0 gap-3 text-sm text-[var(--app-muted)] md:grid-cols-3">
-                  <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
-                    <div className="font-black text-[var(--app-text)]">Client-side</div>
-                    <div>No server cost for V1.</div>
-                  </div>
-
-                  <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
-                    <div className="font-black text-[var(--app-text)]">
-                      Scannable preview
-                    </div>
-                    <div>1 column on mobile, 2 by default on desktop.</div>
-                  </div>
-
-                  <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
-                    <div className="font-black text-[var(--app-text)]">PDF export</div>
-                    <div>Bulk sheet downloads as one PDF.</div>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </motion.div>
