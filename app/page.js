@@ -398,7 +398,7 @@ export default function BarcodeQrGeneratorApp() {
         }
       `}</style>
 
-      <section className="mx-auto flex min-h-screen w-full max-w-[1900px] flex-col px-4 py-5 sm:px-5 lg:px-8 xl:h-screen xl:overflow-hidden xl:px-10">
+      <section className="mx-auto flex min-h-screen w-full max-w-[1900px] flex-col px-4 py-5 sm:px-5 lg:px-8 xl:min-h-[115vh] xl:px-10">
         <motion.header
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
@@ -444,7 +444,7 @@ export default function BarcodeQrGeneratorApp() {
           </div>
         </motion.header>
 
-        <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[0.78fr_1.22fr]">
+        <div className="grid flex-1 gap-5 xl:grid-cols-[0.78fr_1.22fr]">
           <motion.div
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
@@ -452,7 +452,7 @@ export default function BarcodeQrGeneratorApp() {
             className="min-h-0 min-w-0"
           >
             <Card className="h-auto overflow-hidden border border-[var(--app-border)] bg-[var(--app-panel)] shadow-[var(--app-shadow)] xl:h-full">
-              <CardContent className="h-auto p-4 md:p-5 xl:h-full xl:overflow-y-auto xl:p-6">
+              <CardContent className="h-auto p-4 md:p-5 xl:p-6">
                 <div className="space-y-4">
                   <div className="grid grid-cols-3 gap-2 rounded-2xl bg-[var(--app-surface-2)] p-1.5 sm:p-2">
                     <button
@@ -750,7 +750,7 @@ export default function BarcodeQrGeneratorApp() {
             className="min-h-0 min-w-0"
           >
             <Card className="h-auto overflow-hidden border border-[var(--app-border)] bg-[var(--app-panel)] shadow-[var(--app-shadow)] xl:h-full">
-              <CardContent className="flex h-auto flex-col gap-4 p-4 md:p-5 xl:h-full xl:p-6">
+              <CardContent className="flex h-auto flex-col gap-4 p-4 md:p-5 xl:p-6">
                 <div className="flex shrink-0 flex-col gap-3 md:flex-row md:items-end md:justify-between">
                   <div>
                     <h2 className="text-2xl font-black tracking-[-0.03em] text-[var(--app-text)] md:text-3xl">
@@ -770,11 +770,11 @@ export default function BarcodeQrGeneratorApp() {
                   </div>
                 </div>
 
-                <div className="min-h-[360px] flex-1 overflow-x-hidden overflow-y-auto rounded-[2rem] bg-[var(--app-surface-2)] p-3 md:p-5 xl:min-h-0 xl:p-7">
+                <div className="min-h-[560px] flex-1 overflow-x-hidden rounded-[2rem] bg-[var(--app-surface-2)] p-3 md:min-h-[680px] md:p-5 xl:min-h-[760px] xl:p-7">
                   {mode !== "bulk" ? (
                     <div
                       ref={previewRef}
-                      className="flex min-h-[420px] w-full items-center justify-center rounded-[1.65rem] p-6 shadow-sm md:min-h-[560px] md:p-8"
+                      className="flex min-h-[520px] w-full items-center justify-center rounded-[1.65rem] p-6 shadow-sm md:min-h-[680px] md:p-8 xl:min-h-[760px]"
                       style={{ backgroundColor: background }}
                     >
                       {mode === "qr" ? (
@@ -831,6 +831,25 @@ export default function BarcodeQrGeneratorApp() {
                       )}
                     </div>
                   )}
+                </div>
+
+                <div className="grid shrink-0 gap-3 text-sm text-[var(--app-muted)] md:grid-cols-3">
+                  <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+                    <div className="font-black text-[var(--app-text)]">Client-side</div>
+                    <div>No server cost for V1.</div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+                    <div className="font-black text-[var(--app-text)]">
+                      Scannable preview
+                    </div>
+                    <div>1 column on mobile, 2 by default on desktop.</div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
+                    <div className="font-black text-[var(--app-text)]">PDF export</div>
+                    <div>Bulk sheet downloads as one PDF.</div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
