@@ -7,6 +7,8 @@ import {
   QrCode,
   Barcode,
   RotateCcw,
+  Copy,
+  Check,
   Layers,
   FileDown,
   FileText,
@@ -93,9 +95,9 @@ function BarcodePreview({
         lineColor: foreground,
         background,
         width: 2,
-        height: Math.max(92, Number(size) * 0.34),
+        height: Math.max(84, Number(size) * 0.32),
         displayValue: showValue,
-        fontSize: 16,
+        fontSize: 15,
         margin: Number(margin) * 8,
       });
     } catch (err) {
@@ -106,13 +108,12 @@ function BarcodePreview({
   return <svg ref={svgRef} className="h-auto w-full max-w-full" />;
 }
 
-export default function Page() {
+export default function BarcodeQrGeneratorApp() {
   const [mode, setMode] = useState("bulk");
   const [value, setValue] = useState("https://example.com");
   const [bulkValues, setBulkValues] = useState(
     "SKU-1001\nSKU-1002\nSKU-1003\nSKU-1004\nSKU-1005\nSKU-1006"
   );
-
   const [barcodeFormat, setBarcodeFormat] = useState("CODE128");
   const [foreground, setForeground] = useState("#111827");
   const [background, setBackground] = useState("#ffffff");
@@ -120,10 +121,10 @@ export default function Page() {
   const [margin, setMargin] = useState(2);
   const [columns, setColumns] = useState(2);
   const [showBulkValue, setShowBulkValue] = useState(true);
-
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [error, setError] = useState("");
   const [bulkErrors, setBulkErrors] = useState([]);
+  const [copied, setCopied] = useState(false);
 
   const barcodeRef = useRef(null);
   const previewRef = useRef(null);
@@ -206,6 +207,12 @@ export default function Page() {
     setShowBulkValue(true);
     setError("");
     setBulkErrors([]);
+  };
+
+  const copyValue = async () => {
+    await navigator.clipboard.writeText(mode === "bulk" ? bulkValues : value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
   };
 
   const downloadPng = async () => {
@@ -379,10 +386,25 @@ export default function Page() {
         input[type="range"] {
           accent-color: var(--app-accent);
         }
+
+        .bulk-grid {
+          grid-template-columns: 1fr;
+        }
+
+        @media (min-width: 768px) {
+          .bulk-grid {
+            grid-template-columns: repeat(var(--bulk-columns), minmax(0, 1fr));
+          }
+        }
       `}</style>
 
-      <section className="mx-auto flex h-screen w-full max-w-[1900px] flex-col overflow-hidden px-5 py-5 lg:px-8 xl:px-10">
-        <header className="mb-4 flex shrink-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <section className="mx-auto flex min-h-screen w-full max-w-[1900px] flex-col px-4 py-5 sm:px-5 lg:px-8 xl:h-screen xl:overflow-hidden xl:px-10">
+        <motion.header
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="mb-4 flex shrink-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"
+        >
           <div className="max-w-4xl space-y-3">
             <div className="inline-flex items-center gap-3 rounded-full border border-[var(--app-border)] bg-[var(--app-accent-soft)] px-4 py-2 text-sm font-bold text-[var(--app-text)]">
               <svg
@@ -402,7 +424,7 @@ export default function Page() {
               <span>Bar/Data</span>
             </div>
 
-            <h1 className="text-balance text-4xl font-black tracking-[-0.045em] md:text-5xl xl:text-6xl">
+            <h1 className="text-balance text-[2.6rem] font-black leading-[0.95] tracking-[-0.045em] sm:text-5xl md:text-6xl xl:text-6xl">
               Generate scannable QR codes and barcodes.
             </h1>
 
@@ -412,7 +434,7 @@ export default function Page() {
             </p>
           </div>
 
-          <div className="rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface)] px-5 py-4 shadow-[var(--app-shadow)] lg:min-w-[320px]">
+          <div className="hidden rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface)] px-5 py-4 shadow-[var(--app-shadow)] lg:block lg:min-w-[320px]">
             <p className="text-sm font-bold text-[var(--app-text)]">
               System appearance enabled
             </p>
@@ -420,7 +442,7 @@ export default function Page() {
               The interface follows your Mac/browser light or dark mode automatically.
             </p>
           </div>
-        </header>
+        </motion.header>
 
         <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[0.78fr_1.22fr]">
           <motion.div
@@ -429,13 +451,13 @@ export default function Page() {
             transition={{ duration: 0.35 }}
             className="min-h-0 min-w-0"
           >
-            <Card className="h-full overflow-hidden border border-[var(--app-border)] bg-[var(--app-panel)] shadow-[var(--app-shadow)]">
-              <CardContent className="h-full overflow-y-auto p-4 md:p-5 xl:p-6">
+            <Card className="h-auto overflow-hidden border border-[var(--app-border)] bg-[var(--app-panel)] shadow-[var(--app-shadow)] xl:h-full">
+              <CardContent className="h-auto p-4 md:p-5 xl:h-full xl:overflow-y-auto xl:p-6">
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-2 rounded-2xl bg-[var(--app-surface-2)] p-2">
+                  <div className="grid grid-cols-3 gap-2 rounded-2xl bg-[var(--app-surface-2)] p-1.5 sm:p-2">
                     <button
                       onClick={() => setMode("qr")}
-                      className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-bold transition ${
+                      className={`flex items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs font-bold transition sm:px-3 sm:text-sm ${
                         mode === "qr"
                           ? "bg-[var(--app-accent)] text-slate-950 shadow-lg"
                           : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
@@ -446,7 +468,7 @@ export default function Page() {
 
                     <button
                       onClick={() => setMode("barcode")}
-                      className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-bold transition ${
+                      className={`flex items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs font-bold transition sm:px-3 sm:text-sm ${
                         mode === "barcode"
                           ? "bg-[var(--app-accent)] text-slate-950 shadow-lg"
                           : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
@@ -457,7 +479,7 @@ export default function Page() {
 
                     <button
                       onClick={() => setMode("bulk")}
-                      className={`flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-bold transition ${
+                      className={`flex items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs font-bold transition sm:px-3 sm:text-sm ${
                         mode === "bulk"
                           ? "bg-[var(--app-accent)] text-slate-950 shadow-lg"
                           : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
@@ -510,9 +532,18 @@ export default function Page() {
 
                   {mode !== "bulk" ? (
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-[var(--app-text)]">
-                        Data to encode
-                      </label>
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="text-sm font-bold text-[var(--app-text)]">
+                          Data to encode
+                        </label>
+                        <button
+                          onClick={copyValue}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-[var(--app-accent)]"
+                        >
+                          {copied ? <Check size={14} /> : <Copy size={14} />}
+                          {copied ? "Copied" : "Copy"}
+                        </button>
+                      </div>
                       <textarea
                         value={value}
                         onChange={(e) => setValue(e.target.value)}
@@ -531,7 +562,6 @@ export default function Page() {
                           {bulkItems.length} item{bulkItems.length === 1 ? "" : "s"}
                         </span>
                       </div>
-
                       <textarea
                         value={bulkValues}
                         onChange={(e) => setBulkValues(e.target.value)}
@@ -539,7 +569,6 @@ export default function Page() {
                         placeholder={"Paste one barcode value per line.\nSKU-1001\nSKU-1002\nSKU-1003"}
                         className="w-full resize-none rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-[var(--app-text)] outline-none placeholder:text-[var(--app-muted)] focus:border-[var(--app-accent)]"
                       />
-
                       <p className="text-xs leading-5 text-[var(--app-muted)]">
                         For mixed letters/numbers, use CODE128. EAN-13, UPC, and
                         ITF-14 require specific digit lengths.
@@ -720,9 +749,9 @@ export default function Page() {
             transition={{ duration: 0.35, delay: 0.05 }}
             className="min-h-0 min-w-0"
           >
-            <Card className="h-full overflow-hidden border border-[var(--app-border)] bg-[var(--app-panel)] shadow-[var(--app-shadow)]">
-              <CardContent className="flex h-full flex-col gap-4 p-4 md:p-5 xl:p-6">
-                <div className="flex shrink-0 flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <Card className="h-auto overflow-hidden border border-[var(--app-border)] bg-[var(--app-panel)] shadow-[var(--app-shadow)] xl:h-full">
+              <CardContent className="flex h-auto flex-col gap-4 p-4 md:p-5 xl:h-full xl:p-6">
+                <div className="flex shrink-0 flex-col gap-3 md:flex-row md:items-end md:justify-between">
                   <div>
                     <h2 className="text-2xl font-black tracking-[-0.03em] text-[var(--app-text)] md:text-3xl">
                       Live preview
@@ -732,7 +761,7 @@ export default function Page() {
                     </p>
                   </div>
 
-                  <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm text-[var(--app-muted)]">
+                  <div className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm text-[var(--app-muted)] md:w-auto">
                     {mode === "bulk"
                       ? `${bulkItems.length} bulk items`
                       : mode === "qr"
@@ -741,11 +770,11 @@ export default function Page() {
                   </div>
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-y-auto rounded-[2rem] bg-[var(--app-surface-2)] p-3 md:p-5 xl:p-7">
+                <div className="min-h-[360px] flex-1 overflow-x-hidden overflow-y-auto rounded-[2rem] bg-[var(--app-surface-2)] p-3 md:p-5 xl:min-h-0 xl:p-7">
                   {mode !== "bulk" ? (
                     <div
                       ref={previewRef}
-                      className="flex min-h-[520px] w-full items-center justify-center rounded-[1.65rem] p-8 shadow-sm"
+                      className="flex min-h-[420px] w-full items-center justify-center rounded-[1.65rem] p-6 shadow-sm md:min-h-[560px] md:p-8"
                       style={{ backgroundColor: background }}
                     >
                       {mode === "qr" ? (
@@ -769,20 +798,18 @@ export default function Page() {
                   ) : (
                     <div
                       ref={bulkSheetRef}
-                      className="mx-auto w-full max-w-[1150px] rounded-[1.65rem] p-5 shadow-sm md:p-7"
+                      className="mx-auto w-full max-w-[1150px] rounded-[1.65rem] p-4 shadow-sm sm:p-5 md:p-7"
                       style={{ backgroundColor: background }}
                     >
                       {bulkItems.length ? (
                         <div
-                          className="grid gap-5"
-                          style={{
-                            gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
-                          }}
+                          className="bulk-grid grid gap-4 md:gap-5"
+                          style={{ "--bulk-columns": columns }}
                         >
                           {bulkItems.map((item, index) => (
                             <div
                               key={`${item}-${index}`}
-                              className="flex min-h-[190px] flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-5"
+                              className="flex min-h-[165px] flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-4 sm:min-h-[190px] sm:p-5"
                             >
                               <BarcodePreview
                                 value={item}
@@ -798,7 +825,7 @@ export default function Page() {
                           ))}
                         </div>
                       ) : (
-                        <div className="flex min-h-[520px] items-center justify-center text-center text-slate-500">
+                        <div className="flex min-h-[420px] items-center justify-center text-center text-slate-500">
                           Paste one barcode value per line to generate a bulk sheet.
                         </div>
                       )}
@@ -816,7 +843,7 @@ export default function Page() {
                     <div className="font-black text-[var(--app-text)]">
                       Scannable preview
                     </div>
-                    <div>2 barcodes per row by default.</div>
+                    <div>1 column on mobile, 2 by default on desktop.</div>
                   </div>
 
                   <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
