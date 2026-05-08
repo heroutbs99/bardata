@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Bar/Data
 
-## Getting Started
+Bar/Data is a clean QR code and barcode generator built with Next.js. It supports single QR codes, single barcodes, and bulk barcode sheet generation with export options for PNG, SVG, PDF, and CSV.
 
-First, run the development server:
+## Live Demo
+
+https://bardata.vercel.app
+
+Replace the link above with your real Vercel link.
+
+## Features
+
+- Generate QR codes for URLs, text, email, phone numbers, and Wi-Fi
+- Generate single barcodes
+- Generate bulk barcode sheets from line-by-line values
+- Export as PNG
+- Export as SVG
+- Export bulk barcode sheets as PDF
+- Export bulk values as CSV
+- System light/dark mode support
+- Responsive layout for desktop and mobile
+- Client-side generation with no backend required
+
+## Supported Barcode Formats
+
+| Format | Best For | Example |
+|---|---|---|
+| CODE128 | General text, SKUs, inventory codes | `SKU-1001` |
+| CODE39 | Basic inventory and industrial labels | `ABC-123` |
+| EAN-13 | Retail product codes | `5901234123457` |
+| UPC-A | North American retail product codes | `123456789012` |
+| ITF-14 | Shipping cartons and packaging | `10012345678902` |
+| MSI | Numeric inventory systems | `1234567890` |
+
+> Some barcode formats require specific numeric lengths. If unsure, use CODE128 for general-purpose text and SKU values.
+
+## Tech Stack
+
+- Next.js
+- React
+- Tailwind CSS
+- shadcn/ui
+- Lucide React
+- QRCode
+- JsBarcode
+- html-to-image
+- jsPDF
+- Vercel
+
+## Installation
+
+Clone the repository:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+git clone https://github.com/heroutbs99/bardata.git
+cd bardata
