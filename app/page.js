@@ -464,7 +464,7 @@ export default function BarcodeQrGeneratorApp() {
   );
   const [barcodeFormat, setBarcodeFormat] = useState("CODE128");
   const [foreground, setForeground] = useState("#111827");
-  const [background, setBackground] = useState("#ffffff");
+  const [background, setBackground] = useState("transparent");
   const [size, setSize] = useState(220);
   const [margin, setMargin] = useState(3);
   const [columns, setColumns] = useState(3);
@@ -479,6 +479,10 @@ export default function BarcodeQrGeneratorApp() {
   const previewRef = useRef(null);
   const bulkSheetRef = useRef(null);
   const previewContainerRef = useRef(null);
+
+  // When preview background is "transparent" the actual barcode/QR still
+  // needs a real colour — libraries don't support transparent fills.
+  const codeBg = background === "transparent" ? "#ffffff" : background;
 
   const bulkItems = useMemo(() => getBulkItems(bulkValues), [bulkValues]);
   const fileBase = useMemo(() => safeFileName(`${mode}-${value}`), [mode, value]);
@@ -505,7 +509,7 @@ export default function BarcodeQrGeneratorApp() {
         margin: Number(margin),
         color: {
           dark: foreground,
-          light: background,
+          light: codeBg,
         },
         errorCorrectionLevel: "H",
       })
@@ -520,7 +524,7 @@ export default function BarcodeQrGeneratorApp() {
         JsBarcode(barcodeRef.current, value, {
           format: barcodeFormat,
           lineColor: foreground,
-          background,
+          background: codeBg,
           width: 2.2,
           height: Math.max(120, Number(size) * 0.45),
           displayValue: true,
@@ -595,7 +599,7 @@ export default function BarcodeQrGeneratorApp() {
     setBulkValues("SKU-1001\nSKU-1002\nSKU-1003\nSKU-1004\nSKU-1005\nSKU-1006");
     setBarcodeFormat("CODE128");
     setForeground("#111827");
-    setBackground("#ffffff");
+    setBackground("transparent");
     setSize(220);
     setMargin(3);
     setColumns(3);
@@ -618,7 +622,7 @@ export default function BarcodeQrGeneratorApp() {
           ? bulkType === "qr"
             ? await createQRBulkExportCanvas({ bulkItems, foreground, size, margin, columns, showValue: showQrValue })
             : createBulkExportCanvas({ bulkItems, barcodeFormat, foreground, size, margin, columns, showBulkValue })
-          : await createSingleExportCanvas({ mode, value, barcodeFormat, foreground, background, size, margin });
+          : await createSingleExportCanvas({ mode, value, barcodeFormat, foreground, background: codeBg, size, margin });
 
       downloadDataUrl(
         canvas.toDataURL("image/png"),
@@ -640,7 +644,7 @@ export default function BarcodeQrGeneratorApp() {
           margin: Number(margin),
           color: {
             dark: foreground,
-            light: background,
+            light: codeBg,
           },
           errorCorrectionLevel: "H",
         });
@@ -885,8 +889,8 @@ export default function BarcodeQrGeneratorApp() {
             --app-surface: rgba(255, 255, 255, 0.08);
             --app-surface-2: rgba(255, 255, 255, 0.04);
             --app-panel: rgba(255, 255, 255, 0.06);
-            --app-text: #e2eaff;
-            --app-muted: #8898c0;
+            --app-text: #edf2ff;
+            --app-muted: #a8b8d8;
             --app-border: rgba(255, 255, 255, 0.14);
             --app-accent: #22d3ee;
             --app-accent-soft: rgba(34, 211, 238, 0.15);
@@ -1269,22 +1273,50 @@ export default function BarcodeQrGeneratorApp() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-sm font-bold text-[var(--app-text)]">
-                        Background
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="color"
-                          value={background}
-                          onChange={(e) => setBackground(e.target.value)}
-                          className="h-11 w-14 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1"
-                        />
-                        <input
-                          value={background}
-                          onChange={(e) => setBackground(e.target.value)}
-                          className="min-w-0 flex-1 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2.5 text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]"
-                        />
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-bold text-[var(--app-text)]">
+                          Background
+                        </label>
+                        <button
+                          onClick={() =>
+                            setBackground(
+                              background === "transparent" ? "#ffffff" : "transparent"
+                            )
+                          }
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
+                            background === "transparent"
+                              ? "bg-[var(--app-accent)] text-slate-950"
+                              : "border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-muted)] hover:text-[var(--app-text)]"
+                          }`}
+                        >
+                          {/* checkerboard icon */}
+                          <span
+                            className="inline-block h-3 w-3 rounded-sm border border-current/20"
+                            style={{
+                              backgroundImage:
+                                "linear-gradient(45deg,#aaa 25%,transparent 25%),linear-gradient(-45deg,#aaa 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#aaa 75%),linear-gradient(-45deg,transparent 75%,#aaa 75%)",
+                              backgroundSize: "6px 6px",
+                              backgroundPosition: "0 0,0 3px,3px -3px,-3px 0",
+                            }}
+                          />
+                          None
+                        </button>
                       </div>
+                      {background !== "transparent" && (
+                        <div className="flex gap-2">
+                          <input
+                            type="color"
+                            value={background}
+                            onChange={(e) => setBackground(e.target.value)}
+                            className="h-11 w-14 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1"
+                          />
+                          <input
+                            value={background}
+                            onChange={(e) => setBackground(e.target.value)}
+                            className="min-w-0 flex-1 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2.5 text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1558,7 +1590,7 @@ export default function BarcodeQrGeneratorApp() {
                 <polygon fill="#ffc200" points="251.08 167.29 418.41 167.26 418.41 251.01 251.22 251.01 251.18 418.25 418.29 418.28 418.57 501.84 167.53 501.84 167.42 167.29 251.08 167.29"/>
                 <rect fill="#ffc200" x="585.13" y="0" width=".48" height="501.84"/>
               </svg>
-            Designed &amp; maintained by The Creative Fella
+            Designed &amp; Maintained by The Creative Fella
           </a>
         </div>
       </footer>
