@@ -135,10 +135,15 @@ function drawBrandFooter(ctx, width, height) {
   ctx.lineTo(width - 36, height - 58);
   ctx.stroke();
 
-  ctx.fillStyle = "#64748b";
-  ctx.font = "600 14px Arial, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText("Generated with BarData", width / 2, height - 24);
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "600 13px Arial, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("Generated with BarData", 44, height - 24);
+
+  ctx.fillStyle = "#06b6d4";
+  ctx.font = "700 13px Arial, sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText("Made by The Creative Fella · tcfella.com", width - 44, height - 24);
 }
 
 function createBarcodeCanvas(value, options) {
@@ -254,7 +259,8 @@ function makeSvgBrandHeader(width) {
 function makeSvgFooter(width, height) {
   return `
     <line x1="36" y1="${height - 58}" x2="${width - 36}" y2="${height - 58}" stroke="#e2e8f0"/>
-    <text x="${width / 2}" y="${height - 24}" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="600" fill="#64748b">Generated with BarData</text>
+    <text x="44" y="${height - 24}" text-anchor="start" font-family="Arial, sans-serif" font-size="13" font-weight="600" fill="#94a3b8">Generated with BarData</text>
+    <text x="${width - 44}" y="${height - 24}" text-anchor="end" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#06b6d4">Made by The Creative Fella · tcfella.com</text>
   `;
 }
 
@@ -458,10 +464,15 @@ function BarcodePreview({
 export default function BarcodeQrGeneratorApp() {
   const [mode, setMode] = useState("bulk");
   const [bulkType, setBulkType] = useState("barcode");
-  const [value, setValue] = useState("https://example.com");
-  const [bulkValues, setBulkValues] = useState(
+  const [value, setValue] = useState("https://tcfella.com");
+  const [bulkBarcodeValues, setBulkBarcodeValues] = useState(
     "SKU-1001\nSKU-1002\nSKU-1003\nSKU-1004\nSKU-1005\nSKU-1006"
   );
+  const [bulkQrValues, setBulkQrValues] = useState(
+    "https://tcfella.com/1\nhttps://tcfella.com/2\nhttps://tcfella.com/3\nhttps://tcfella.com/4\nhttps://tcfella.com/5\nhttps://tcfella.com/6"
+  );
+  const bulkValues = bulkType === "qr" ? bulkQrValues : bulkBarcodeValues;
+  const setBulkValues = bulkType === "qr" ? setBulkQrValues : setBulkBarcodeValues;
   const [barcodeFormat, setBarcodeFormat] = useState("CODE128");
   const [foreground, setForeground] = useState("#111827");
   const [background, setBackground] = useState("transparent");
@@ -595,8 +606,9 @@ export default function BarcodeQrGeneratorApp() {
   const reset = () => {
     setMode("bulk");
     setBulkType("barcode");
-    setValue("https://example.com");
-    setBulkValues("SKU-1001\nSKU-1002\nSKU-1003\nSKU-1004\nSKU-1005\nSKU-1006");
+    setValue("https://tcfella.com");
+    setBulkBarcodeValues("SKU-1001\nSKU-1002\nSKU-1003\nSKU-1004\nSKU-1005\nSKU-1006");
+    setBulkQrValues("https://tcfella.com/1\nhttps://tcfella.com/2\nhttps://tcfella.com/3\nhttps://tcfella.com/4\nhttps://tcfella.com/5\nhttps://tcfella.com/6");
     setBarcodeFormat("CODE128");
     setForeground("#111827");
     setBackground("transparent");
@@ -872,7 +884,7 @@ export default function BarcodeQrGeneratorApp() {
       <style jsx global>{`
         /* ── Design tokens ─────────────────────────────────────────────── */
         :root {
-          --app-bg: #cddcf5;
+          --app-bg: #c8e8f8;
           --app-surface: rgba(255, 255, 255, 0.58);
           --app-surface-2: rgba(255, 255, 255, 0.32);
           --app-panel: rgba(255, 255, 255, 0.46);
@@ -971,27 +983,27 @@ export default function BarcodeQrGeneratorApp() {
         }
 
         /* ── Gradient-mesh background ──────────────────────────────────── */
-        /*  Six large elliptical colour blobs — the glass tiles blur these  */
+        /*  All blobs stay in the cyan → sky → blue → teal brand palette   */
         .soft-texture {
           background-color: var(--app-bg);
           background-image:
-            radial-gradient(ellipse 72% 60% at  8% 18%, rgba(99,  102, 241, 0.22), transparent),
-            radial-gradient(ellipse 62% 55% at 88%  8%, rgba(6,   182, 212, 0.28), transparent),
-            radial-gradient(ellipse 68% 58% at 72% 84%, rgba(59,  130, 246, 0.22), transparent),
-            radial-gradient(ellipse 58% 50% at  3% 82%, rgba(168,  85, 247, 0.18), transparent),
-            radial-gradient(ellipse 52% 46% at 94% 78%, rgba(14,  165, 233, 0.16), transparent),
-            radial-gradient(ellipse 44% 40% at 46% 46%, rgba(34,  211, 238, 0.09), transparent);
+            radial-gradient(ellipse 74% 62% at 10% 14%, rgba(6,   182, 212, 0.32), transparent),
+            radial-gradient(ellipse 60% 52% at 86% 11%, rgba(14,  165, 233, 0.26), transparent),
+            radial-gradient(ellipse 62% 54% at 18% 78%, rgba(59,  130, 246, 0.22), transparent),
+            radial-gradient(ellipse 54% 48% at 72% 52%, rgba(96,  165, 250, 0.17), transparent),
+            radial-gradient(ellipse 42% 38% at 46% 40%, rgba(34,  211, 238, 0.10), transparent),
+            radial-gradient(ellipse 38% 32% at 92% 90%, rgba(20,  184, 166, 0.14), transparent);
         }
 
         @media (prefers-color-scheme: dark) {
           .soft-texture {
             background-image:
-              radial-gradient(ellipse 72% 60% at  8% 18%, rgba(99,  102, 241, 0.45), transparent),
-              radial-gradient(ellipse 62% 55% at 88%  8%, rgba(6,   182, 212, 0.42), transparent),
-              radial-gradient(ellipse 68% 58% at 72% 84%, rgba(59,  130, 246, 0.36), transparent),
-              radial-gradient(ellipse 58% 50% at  3% 82%, rgba(168,  85, 247, 0.32), transparent),
-              radial-gradient(ellipse 52% 46% at 94% 78%, rgba(14,  165, 233, 0.28), transparent),
-              radial-gradient(ellipse 44% 40% at 46% 46%, rgba(34,  211, 238, 0.14), transparent);
+              radial-gradient(ellipse 74% 62% at 10% 14%, rgba(6,   182, 212, 0.46), transparent),
+              radial-gradient(ellipse 60% 52% at 86% 11%, rgba(14,  165, 233, 0.40), transparent),
+              radial-gradient(ellipse 62% 54% at 18% 78%, rgba(59,  130, 246, 0.35), transparent),
+              radial-gradient(ellipse 54% 48% at 72% 52%, rgba(96,  165, 250, 0.26), transparent),
+              radial-gradient(ellipse 42% 38% at 46% 40%, rgba(34,  211, 238, 0.14), transparent),
+              radial-gradient(ellipse 38% 32% at 92% 90%, rgba(20,  184, 166, 0.20), transparent);
           }
         }
 
@@ -1050,7 +1062,7 @@ export default function BarcodeQrGeneratorApp() {
 
             <div className="hidden items-center gap-2 rounded-full border border-[var(--app-border)] bg-[var(--app-surface-2)] px-4 py-2 text-xs font-bold text-[var(--app-muted)] sm:flex">
               <span className="h-2 w-2 rounded-full bg-[var(--app-accent)]" />
-              Client-side generator
+              Client-side · free · no sign-up
             </div>
           </nav>
 
@@ -1230,7 +1242,7 @@ export default function BarcodeQrGeneratorApp() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-3">
                         <label className="text-sm font-bold text-[var(--app-text)]">
-                          Bulk barcode values
+                          {bulkType === "qr" ? "Bulk QR values" : "Bulk barcode values"}
                         </label>
                         <span className="text-xs font-medium text-[var(--app-muted)]">
                           {bulkItems.length} item{bulkItems.length === 1 ? "" : "s"}
@@ -1241,13 +1253,16 @@ export default function BarcodeQrGeneratorApp() {
                         onChange={(e) => setBulkValues(e.target.value)}
                         rows={6}
                         placeholder={
-                          "Paste one barcode value per line.\nSKU-1001\nSKU-1002\nSKU-1003"
+                          bulkType === "qr"
+                            ? "Paste one value per line.\nhttps://example.com\nmailto:hello@example.com\nHello, World!"
+                            : "Paste one barcode value per line.\nSKU-1001\nSKU-1002\nSKU-1003"
                         }
                         className="w-full resize-none rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-[var(--app-text)] outline-none placeholder:text-[var(--app-muted)] focus:border-[var(--app-accent)]"
                       />
                       <p className="text-xs leading-5 text-[var(--app-muted)]">
-                        For mixed letters/numbers, use CODE128. EAN-13, UPC, and
-                        ITF-14 require specific digit lengths.
+                        {bulkType === "qr"
+                          ? "QR codes support URLs, plain text, email, phone, Wi-Fi strings, and more."
+                          : "For mixed letters/numbers, use CODE128. EAN-13, UPC, and ITF-14 require specific digit lengths."}
                       </p>
                     </div>
                   )}
