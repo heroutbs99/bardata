@@ -392,9 +392,9 @@ export default function BarcodeQrGeneratorApp() {
   const [barcodeFormat, setBarcodeFormat] = useState("CODE128");
   const [foreground, setForeground] = useState("#111827");
   const [background, setBackground] = useState("#ffffff");
-  const [size, setSize] = useState(320);
-  const [margin, setMargin] = useState(2);
-  const [columns, setColumns] = useState(2);
+  const [size, setSize] = useState(220);
+  const [margin, setMargin] = useState(3);
+  const [columns, setColumns] = useState(3);
   const [showBulkValue, setShowBulkValue] = useState(true);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [error, setError] = useState("");
@@ -476,9 +476,9 @@ export default function BarcodeQrGeneratorApp() {
     setBarcodeFormat("CODE128");
     setForeground("#111827");
     setBackground("#ffffff");
-    setSize(320);
-    setMargin(2);
-    setColumns(2);
+    setSize(220);
+    setMargin(3);
+    setColumns(3);
     setShowBulkValue(true);
     setError("");
     setBulkErrors([]);
@@ -720,7 +720,7 @@ export default function BarcodeQrGeneratorApp() {
   };
 
   return (
-    <main className="soft-texture relative min-h-screen overflow-hidden bg-[var(--app-bg)] font-sans text-[var(--app-text)] transition-colors duration-300">
+    <main className="soft-texture relative min-h-screen overflow-hidden bg-[var(--app-bg)] font-sans text-[var(--app-text)] transition-colors duration-300 xl:overflow-visible">
       <style jsx global>{`
         :root {
           --app-bg: #eef7ff;
@@ -842,7 +842,7 @@ export default function BarcodeQrGeneratorApp() {
         }
       `}</style>
 
-      <section className="relative mx-auto flex min-h-screen w-full max-w-[1800px] flex-col overflow-hidden px-4 py-4 sm:px-5 lg:px-7 xl:min-h-[108vh] xl:px-8">
+      <section className="relative mx-auto flex min-h-screen w-full max-w-[1800px] flex-col overflow-hidden px-4 py-4 sm:px-5 lg:px-7 xl:min-h-0 xl:overflow-visible xl:px-8">
         <div className="pointer-events-none absolute left-[-120px] top-[-120px] h-[340px] w-[340px] rounded-full bg-cyan-400/20 blur-3xl" />
         <div className="pointer-events-none absolute bottom-[-140px] right-[-120px] h-[420px] w-[420px] rounded-full bg-blue-500/10 blur-3xl" />
 
@@ -916,14 +916,14 @@ export default function BarcodeQrGeneratorApp() {
           </div>
         </motion.header>
 
-        <div className="relative z-10 grid flex-1 gap-4 xl:grid-cols-[0.72fr_1.28fr]">
+        <div className="relative z-10 grid flex-1 gap-4 xl:grid-cols-[0.72fr_1.28fr] xl:items-start">
           <motion.div
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="min-h-0 min-w-0"
+            className="min-h-0 min-w-0 xl:sticky xl:top-4 xl:self-start"
           >
-            <Card className="glass-card h-auto overflow-hidden rounded-[2rem] border border-[var(--app-border)] shadow-[var(--app-shadow)] xl:h-full">
+            <Card className="glass-card h-auto overflow-hidden rounded-[2rem] border border-[var(--app-border)] shadow-[var(--app-shadow)]">
               <CardContent className="h-auto p-4 md:p-5 xl:p-6">
                 <div className="space-y-4">
                   <div className="grid grid-cols-3 gap-2 rounded-[1.5rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-1.5 backdrop-blur-xl sm:p-2">
@@ -1223,7 +1223,7 @@ export default function BarcodeQrGeneratorApp() {
             transition={{ duration: 0.35, delay: 0.05 }}
             className="min-h-0 min-w-0"
           >
-            <Card className="glass-card h-auto overflow-hidden rounded-[2rem] border border-[var(--app-border)] shadow-[var(--app-shadow)] xl:h-full">
+            <Card className="glass-card h-auto overflow-hidden rounded-[2rem] border border-[var(--app-border)] shadow-[var(--app-shadow)]">
               <CardContent className="flex h-auto flex-col gap-4 p-4 md:p-5 xl:p-6">
                 <div className="flex shrink-0 flex-col gap-3 md:flex-row md:items-end md:justify-between">
                   <div>
@@ -1244,7 +1244,7 @@ export default function BarcodeQrGeneratorApp() {
                   </div>
                 </div>
 
-                <div className="min-h-[560px] flex-1 overflow-x-hidden rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-3 shadow-inner backdrop-blur-xl md:min-h-[680px] md:p-5 xl:min-h-[760px] xl:p-7">
+                <div className="min-h-[560px] flex-1 overflow-x-hidden rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-3 shadow-inner backdrop-blur-xl md:min-h-[680px] md:p-5 xl:min-h-[500px] xl:max-h-[calc(100vh-220px)] xl:overflow-y-auto xl:p-7">
                   {mode !== "bulk" ? (
                     <div
                       ref={previewRef}
@@ -1311,6 +1311,23 @@ export default function BarcodeQrGeneratorApp() {
           </motion.div>
         </div>
       </section>
+
+      <footer className="relative z-10 w-full border-t border-[var(--app-border)] bg-[var(--app-surface)]/60 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-[1800px] flex-col items-center justify-between gap-3 px-6 py-4 sm:flex-row sm:gap-2">
+          <p className="text-xs text-[var(--app-muted)]">
+            © {new Date().getFullYear()} BarData. All rights reserved.
+          </p>
+          <a
+            href="https://tcfella.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--app-border)] bg-[var(--app-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--app-muted)] transition hover:border-[var(--app-accent)] hover:text-[var(--app-text)]"
+          >
+            <img src="/tcf-logo.svg" alt="The Creative Fella" className="h-4 w-4 object-contain" />
+            Designed &amp; maintained by The Creative Fella
+          </a>
+        </div>
+      </footer>
     </main>
   );
 }
