@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 export const metadata = {
   title: "BarData — QR Code & Barcode Generator",
   description:
-    "Generate QR codes, single barcodes, and bulk barcode sheets. Export as PNG, SVG, or PDF — free, client-side, no sign-up. Made by The Creative Fella.",
+    "Generate QR codes, single barcodes, and bulk barcode sheets. Export as PNG, SVG, or PDF — free, client-side, no sign-up. by tcfella.com",
   keywords: [
     "barcode generator",
     "QR code generator",
@@ -22,16 +22,21 @@ export const metadata = {
     "barcode PDF",
     "SKU barcode",
     "BarData",
-    "The Creative Fella",
+    "tcfella.com",
     "tcfella",
   ],
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
   authors: [{ name: "Utsab Bhattarai", url: "https://tcfella.com" }],
   creator: "Utsab Bhattarai",
   metadataBase: new URL("https://bardata.tcfella.com"),
   openGraph: {
     title: "BarData — QR Code & Barcode Generator",
     description:
-      "Free QR code and barcode generator with bulk export. PNG, SVG, PDF — no sign-up needed. Made by The Creative Fella.",
+      "Free QR code and barcode generator with bulk export. PNG, SVG, PDF — no sign-up needed. by tcfella.com",
     type: "website",
     url: "https://bardata.tcfella.com",
     siteName: "BarData",
@@ -40,7 +45,7 @@ export const metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "BarData — QR Code & Barcode Generator by The Creative Fella",
+        alt: "BarData — QR Code & Barcode Generator by tcfella.com",
       },
     ],
   },
@@ -48,7 +53,7 @@ export const metadata = {
     card: "summary_large_image",
     title: "BarData — QR Code & Barcode Generator",
     description:
-      "Free QR code and barcode generator with bulk export. PNG, SVG, PDF — no sign-up needed. Made by The Creative Fella.",
+      "Free QR code and barcode generator with bulk export. PNG, SVG, PDF — no sign-up needed. by tcfella.com",
     images: ["/og-image.png"],
     creator: "@tcfella",
   },

@@ -1,8 +1,15 @@
-<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="64" height="64" rx="16" fill="#050816"/>
-  <rect x="13" y="16" width="5" height="32" rx="2" fill="#F8FAFC"/>
-  <rect x="22" y="16" width="3" height="32" rx="1.5" fill="#F8FAFC"/>
-  <rect x="29" y="16" width="7" height="32" rx="2" fill="#F8FAFC"/>
-  <rect x="40" y="16" width="4" height="32" rx="2" fill="#F8FAFC"/>
-  <rect x="49" y="16" width="6" height="32" rx="2" fill="#22D3EE"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Rounded dark background -->
+  <rect width="512" height="512" rx="114" fill="#0B0B0B"/>
+  <!-- BarData barcode mark, centred — bars proportional to header logo (32×32 → scaled ~13× and centred) -->
+  <!-- Bar 1: wide -->
+  <rect x="136" y="152" width="52" height="208" rx="12" fill="#F5F5F3"/>
+  <!-- Bar 2: thin -->
+  <rect x="210" y="152" width="30" height="208" rx="10" fill="#F5F5F3"/>
+  <!-- Bar 3: medium-wide -->
+  <rect x="262" y="152" width="60" height="208" rx="12" fill="#F5F5F3"/>
+  <!-- Bar 4: thin -->
+  <rect x="344" y="152" width="34" height="208" rx="10" fill="#F5F5F3"/>
+  <!-- Bar 5: widest — gold accent -->
+  <rect x="400" y="152" width="76" height="208" rx="14" fill="#FFD60A"/>
 </svg>

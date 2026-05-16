@@ -102,7 +102,7 @@ function drawBrandHeader(ctx, width, title = "BarData") {
   ctx.fillRect(logoX + 10, logoY, 3, 36);
   ctx.fillRect(logoX + 18, logoY, 8, 36);
   ctx.fillRect(logoX + 32, logoY, 4, 36);
-  ctx.fillStyle = "#06b6d4";
+  ctx.fillStyle = "#ffc200";
   ctx.fillRect(logoX + 44, logoY, 8, 36);
 
   ctx.fillStyle = "#0f172a";
@@ -140,10 +140,10 @@ function drawBrandFooter(ctx, width, height) {
   ctx.textAlign = "left";
   ctx.fillText("Generated with BarData", 44, height - 24);
 
-  ctx.fillStyle = "#06b6d4";
+  ctx.fillStyle = "#ffc200";
   ctx.font = "700 13px Arial, sans-serif";
   ctx.textAlign = "right";
-  ctx.fillText("Made by The Creative Fella · tcfella.com", width - 44, height - 24);
+  ctx.fillText("by tcfella.com", width - 44, height - 24);
 }
 
 function createBarcodeCanvas(value, options) {
@@ -248,7 +248,7 @@ function makeSvgBrandHeader(width) {
     <rect x="54" y="32" width="3" height="36" fill="#0f172a"/>
     <rect x="62" y="32" width="8" height="36" fill="#0f172a"/>
     <rect x="76" y="32" width="4" height="36" fill="#0f172a"/>
-    <rect x="88" y="32" width="8" height="36" fill="#06b6d4"/>
+    <rect x="88" y="32" width="8" height="36" fill="#ffc200"/>
     <text x="118" y="60" font-family="Arial, sans-serif" font-size="34" font-weight="900" fill="#0f172a">BarData</text>
     <text x="118" y="84" font-family="Arial, sans-serif" font-size="15" font-weight="600" fill="#64748b">QR Code &amp; Barcode Generator</text>
     <text x="${width - 44}" y="60" text-anchor="end" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#64748b">GENERATED EXPORT</text>
@@ -260,12 +260,19 @@ function makeSvgFooter(width, height) {
   return `
     <line x1="36" y1="${height - 58}" x2="${width - 36}" y2="${height - 58}" stroke="#e2e8f0"/>
     <text x="44" y="${height - 24}" text-anchor="start" font-family="Arial, sans-serif" font-size="13" font-weight="600" fill="#94a3b8">Generated with BarData</text>
-    <text x="${width - 44}" y="${height - 24}" text-anchor="end" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#06b6d4">Made by The Creative Fella · tcfella.com</text>
+    <text x="${width - 44}" y="${height - 24}" text-anchor="end" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#ffc200">by tcfella.com</text>
   `;
 }
 
 function makeBarcodeSvg(value, options) {
+  // Attach to DOM so JsBarcode can fully initialise (detached elements may not render)
+  const container = document.createElement("div");
+  container.style.cssText =
+    "position:fixed;left:-99999px;top:-99999px;width:0;height:0;overflow:hidden;";
+  document.body.appendChild(container);
   const tempSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  container.appendChild(tempSvg);
+
   JsBarcode(tempSvg, value, {
     format: options.format,
     lineColor: options.foreground,
@@ -277,11 +284,17 @@ function makeBarcodeSvg(value, options) {
     margin: Number(options.margin) * 10,
   });
 
-  return {
-    width: Number(tempSvg.getAttribute("width") || 420),
-    height: Number(tempSvg.getAttribute("height") || 180),
-    inner: tempSvg.innerHTML,
-  };
+  const w = Number(tempSvg.getAttribute("width") || 420);
+  const h = Number(tempSvg.getAttribute("height") || 180);
+
+  // XMLSerializer gives properly-namespaced output; strip outer <svg> wrapper
+  const full = new XMLSerializer().serializeToString(tempSvg);
+  const inner = full
+    .replace(/^<svg[^>]*>/, "")
+    .replace(/<\/svg>\s*$/, "");
+
+  document.body.removeChild(container);
+  return { width: w, height: h, inner };
 }
 
 function createBulkExportCanvas({
@@ -661,18 +674,30 @@ export default function BarcodeQrGeneratorApp() {
           errorCorrectionLevel: "H",
         });
 
-        const qrInner = qrSvg.replace(/<svg[^>]*>/, "").replace(/<\/svg>/, "");
+        const viewBoxMatch = qrSvg.match(/viewBox="([^"]+)"/);
+        const qrViewBox = viewBoxMatch ? viewBoxMatch[1] : "0 0 33 33";
+        const qrInner = qrSvg
+          .replace(/<\?xml[^>]*\?>\s*/g, "")
+          .replace(/<!DOCTYPE[^>]*>\s*/g, "")
+          .replace(/<svg[^>]*>/, "")
+          .replace(/<\/svg>/, "");
+
         const width = 900;
-        const height = 880;
+        const cardX = 120;
+        const cardPad = 30;
+        const qrArea = 600;
+        const cardY = 144;
+        const cardH = qrArea + cardPad * 2;
+        const height = cardY + cardH + 76;
 
         const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="${width}" height="${height}" fill="#ffffff"/>
   ${makeSvgBrandHeader(width)}
-  <rect x="120" y="150" width="660" height="620" rx="28" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
-  <g transform="translate(210 205) scale(1.6)">
+  <rect x="${cardX}" y="${cardY}" width="660" height="${cardH}" rx="28" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+  <svg x="${cardX + cardPad}" y="${cardY + cardPad}" width="${qrArea}" height="${qrArea}" viewBox="${qrViewBox}" xmlns="http://www.w3.org/2000/svg">
     ${qrInner}
-  </g>
+  </svg>
   ${makeSvgFooter(width, height)}
 </svg>`;
 
@@ -703,9 +728,9 @@ export default function BarcodeQrGeneratorApp() {
   <rect width="${width}" height="${height}" fill="#ffffff"/>
   ${makeSvgBrandHeader(width)}
   <rect x="${x}" y="${y}" width="${cardWidth}" height="${cardHeight}" rx="28" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
-  <g transform="translate(${bx} ${by})">
+  <svg x="${bx}" y="${by}" width="${barcode.width}" height="${barcode.height}" viewBox="0 0 ${barcode.width} ${barcode.height}" xmlns="http://www.w3.org/2000/svg">
     ${barcode.inner}
-  </g>
+  </svg>
   ${makeSvgFooter(width, height)}
 </svg>`;
 
@@ -793,9 +818,9 @@ export default function BarcodeQrGeneratorApp() {
           const by = y + (cellHeight - barcode.height) / 2;
           return `
             <rect x="${x}" y="${y}" width="${cellWidth}" height="${cellHeight}" rx="28" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
-            <g transform="translate(${bx} ${by})">
+            <svg x="${bx}" y="${by}" width="${barcode.width}" height="${barcode.height}" viewBox="0 0 ${barcode.width} ${barcode.height}" xmlns="http://www.w3.org/2000/svg">
               ${barcode.inner}
-            </g>`;
+            </svg>`;
         })
         .join("\n");
 
@@ -884,28 +909,28 @@ export default function BarcodeQrGeneratorApp() {
       <style jsx global>{`
         /* ── Design tokens ─────────────────────────────────────────────── */
         :root {
-          --app-bg: #c8e8f8;
-          --app-surface: rgba(255, 255, 255, 0.58);
-          --app-surface-2: rgba(255, 255, 255, 0.32);
-          --app-panel: rgba(255, 255, 255, 0.46);
-          --app-text: #0f172a;
-          --app-muted: #526080;
-          --app-border: rgba(255, 255, 255, 0.55);
-          --app-accent: #06b6d4;
-          --app-accent-soft: rgba(6, 182, 212, 0.16);
+          --app-bg: #f8f8f8;
+          --app-surface: #ffffff;
+          --app-surface-2: rgba(255, 255, 255, 0.70);
+          --app-panel: rgba(255, 255, 255, 0.80);
+          --app-text: #1a1100;
+          --app-muted: #7a6a48;
+          --app-border: rgba(0, 0, 0, 0.10);
+          --app-accent: #c49000;
+          --app-accent-soft: rgba(196, 144, 0, 0.08);
         }
 
         @media (prefers-color-scheme: dark) {
           :root {
-            --app-bg: #060a18;
-            --app-surface: rgba(255, 255, 255, 0.08);
-            --app-surface-2: rgba(255, 255, 255, 0.04);
-            --app-panel: rgba(255, 255, 255, 0.06);
-            --app-text: #edf2ff;
-            --app-muted: #a8b8d8;
-            --app-border: rgba(255, 255, 255, 0.14);
-            --app-accent: #22d3ee;
-            --app-accent-soft: rgba(34, 211, 238, 0.15);
+            --app-bg: #0b0b0b;
+            --app-surface: #141414;
+            --app-surface-2: #1a1a1a;
+            --app-panel: #232323;
+            --app-text: #f5f5f3;
+            --app-muted: #9a9a96;
+            --app-border: rgba(245, 245, 243, 0.10);
+            --app-accent: #ffd60a;
+            --app-accent-soft: rgba(255, 214, 10, 0.12);
           }
         }
 
@@ -921,7 +946,76 @@ export default function BarcodeQrGeneratorApp() {
             BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
 
-        input[type="range"] { accent-color: var(--app-accent); }
+        /* ── Range sliders ─────────────────────────────────────────────── */
+        input[type="range"] {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 100%;
+          height: 6px;
+          border-radius: 3px;
+          background: var(--app-border);
+          outline: none;
+          cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: var(--app-accent);
+          border: 2.5px solid var(--app-bg);
+          box-shadow: 0 1px 6px rgba(0,0,0,0.22);
+          cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: var(--app-accent);
+          border: 2.5px solid var(--app-bg);
+          box-shadow: 0 1px 6px rgba(0,0,0,0.22);
+          cursor: pointer;
+        }
+        input[type="range"]::-moz-range-track {
+          height: 6px;
+          border-radius: 3px;
+          background: var(--app-border);
+        }
+        input[type="range"]:focus::-webkit-slider-thumb {
+          box-shadow: 0 0 0 3px var(--app-accent-soft);
+        }
+
+        /* ── Checkboxes ─────────────────────────────────────────────────── */
+        input[type="checkbox"] {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 18px;
+          height: 18px;
+          flex-shrink: 0;
+          border-radius: 5px;
+          border: 1.5px solid var(--app-border);
+          background: var(--app-surface);
+          cursor: pointer;
+          position: relative;
+          transition: background 0.15s, border-color 0.15s;
+        }
+        input[type="checkbox"]:checked {
+          background: var(--app-accent);
+          border-color: var(--app-accent);
+        }
+        input[type="checkbox"]:checked::after {
+          content: '';
+          position: absolute;
+          left: 4px;
+          top: 1px;
+          width: 6px;
+          height: 10px;
+          border: 2px solid #0b0b0b;
+          border-top: none;
+          border-left: none;
+          transform: rotate(45deg);
+        }
 
         /* ── Liquid-glass card ─────────────────────────────────────────── */
         /*  Top-left highlight + subtle refraction tint + strong blur      */
@@ -944,18 +1038,13 @@ export default function BarcodeQrGeneratorApp() {
 
         @media (prefers-color-scheme: dark) {
           .glass-card {
-            background: linear-gradient(
-              145deg,
-              rgba(255, 255, 255, 0.11) 0%,
-              rgba(255, 255, 255, 0.03) 100%
-            );
-            border: 1px solid rgba(255, 255, 255, 0.13);
+            background: #141414;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            border: 1px solid rgba(245, 245, 243, 0.10);
             box-shadow:
-              inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
-              inset 1px 0   0 rgba(255, 255, 255, 0.07),
-              inset 0 -1px  0 rgba(0,   0,   0,   0.25),
-              0  4px 16px rgba(0, 0, 0, 0.35),
-              0 20px 60px rgba(0, 0, 0, 0.45);
+              0  4px 16px rgba(0, 0, 0, 0.40),
+              0 20px 60px rgba(0, 0, 0, 0.50);
           }
         }
 
@@ -987,23 +1076,23 @@ export default function BarcodeQrGeneratorApp() {
         .soft-texture {
           background-color: var(--app-bg);
           background-image:
-            radial-gradient(ellipse 74% 62% at 10% 14%, rgba(6,   182, 212, 0.32), transparent),
-            radial-gradient(ellipse 60% 52% at 86% 11%, rgba(14,  165, 233, 0.26), transparent),
-            radial-gradient(ellipse 62% 54% at 18% 78%, rgba(59,  130, 246, 0.22), transparent),
-            radial-gradient(ellipse 54% 48% at 72% 52%, rgba(96,  165, 250, 0.17), transparent),
-            radial-gradient(ellipse 42% 38% at 46% 40%, rgba(34,  211, 238, 0.10), transparent),
-            radial-gradient(ellipse 38% 32% at 92% 90%, rgba(20,  184, 166, 0.14), transparent);
+            radial-gradient(ellipse 74% 62% at 10% 14%, rgba(255, 194,   0, 0.02), transparent),
+            radial-gradient(ellipse 60% 52% at 86% 11%, rgba(245, 158,  11, 0.02), transparent),
+            radial-gradient(ellipse 62% 54% at 18% 78%, rgba(234, 179,   8, 0.02), transparent),
+            radial-gradient(ellipse 54% 48% at 72% 52%, rgba(253, 224,  71, 0.01), transparent),
+            radial-gradient(ellipse 42% 38% at 46% 40%, rgba(255, 194,   0, 0.01), transparent),
+            radial-gradient(ellipse 38% 32% at 92% 90%, rgba(217, 119,   6, 0.01), transparent);
         }
 
         @media (prefers-color-scheme: dark) {
           .soft-texture {
             background-image:
-              radial-gradient(ellipse 74% 62% at 10% 14%, rgba(6,   182, 212, 0.46), transparent),
-              radial-gradient(ellipse 60% 52% at 86% 11%, rgba(14,  165, 233, 0.40), transparent),
-              radial-gradient(ellipse 62% 54% at 18% 78%, rgba(59,  130, 246, 0.35), transparent),
-              radial-gradient(ellipse 54% 48% at 72% 52%, rgba(96,  165, 250, 0.26), transparent),
-              radial-gradient(ellipse 42% 38% at 46% 40%, rgba(34,  211, 238, 0.14), transparent),
-              radial-gradient(ellipse 38% 32% at 92% 90%, rgba(20,  184, 166, 0.20), transparent);
+              radial-gradient(ellipse 74% 62% at 10% 14%, rgba(255, 194,   0, 0.04), transparent),
+              radial-gradient(ellipse 60% 52% at 86% 11%, rgba(245, 158,  11, 0.03), transparent),
+              radial-gradient(ellipse 62% 54% at 18% 78%, rgba(234, 179,   8, 0.03), transparent),
+              radial-gradient(ellipse 54% 48% at 72% 52%, rgba(253, 224,  71, 0.02), transparent),
+              radial-gradient(ellipse 42% 38% at 46% 40%, rgba(255, 194,   0, 0.02), transparent),
+              radial-gradient(ellipse 38% 32% at 92% 90%, rgba(217, 119,   6, 0.02), transparent);
           }
         }
 
@@ -1042,10 +1131,10 @@ export default function BarcodeQrGeneratorApp() {
           className="glass-card relative z-10 mb-4 rounded-[1.5rem] p-4 lg:p-5"
         >
           <nav className="mb-4 flex items-center justify-between gap-4">
-            <div className="inline-flex items-center gap-2.5 rounded-full border border-[var(--app-border)] bg-[var(--app-accent-soft)] px-3.5 py-2 text-sm font-black text-[var(--app-text)]">
+            <div className="inline-flex items-center gap-2.5 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 py-2 text-sm font-black text-[var(--app-text)]">
               <svg
-                width="26"
-                height="26"
+                width="34"
+                height="34"
                 viewBox="0 0 32 32"
                 fill="none"
                 aria-hidden="true"
@@ -1057,7 +1146,10 @@ export default function BarcodeQrGeneratorApp() {
                 <rect x="18" y="6" width="2" height="20" rx="1" fill="currentColor" />
                 <rect x="23" y="6" width="6" height="20" rx="1" fill="var(--app-accent)" />
               </svg>
-              <span>BarData</span>
+              <span className="flex flex-col leading-tight">
+                <span>BarData</span>
+                <span className="text-[10px] font-medium opacity-60">by tcfella.com</span>
+              </span>
             </div>
 
             <div className="hidden items-center gap-2 rounded-full border border-[var(--app-border)] bg-[var(--app-surface-2)] px-4 py-2 text-xs font-bold text-[var(--app-muted)] sm:flex">
@@ -1120,7 +1212,7 @@ export default function BarcodeQrGeneratorApp() {
                       onClick={() => setMode("qr")}
                       className={`flex items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs font-bold transition sm:px-3 sm:text-sm ${
                         mode === "qr"
-                          ? "bg-[var(--app-accent)] text-slate-950 shadow-lg"
+                          ? "bg-[var(--app-accent-soft)] text-[var(--app-text)] shadow-sm ring-1 ring-[var(--app-accent)]/40"
                           : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
                       }`}
                     >
@@ -1131,7 +1223,7 @@ export default function BarcodeQrGeneratorApp() {
                       onClick={() => setMode("barcode")}
                       className={`flex items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs font-bold transition sm:px-3 sm:text-sm ${
                         mode === "barcode"
-                          ? "bg-[var(--app-accent)] text-slate-950 shadow-lg"
+                          ? "bg-[var(--app-accent-soft)] text-[var(--app-text)] shadow-sm ring-1 ring-[var(--app-accent)]/40"
                           : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
                       }`}
                     >
@@ -1142,7 +1234,7 @@ export default function BarcodeQrGeneratorApp() {
                       onClick={() => setMode("bulk")}
                       className={`flex items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs font-bold transition sm:px-3 sm:text-sm ${
                         mode === "bulk"
-                          ? "bg-[var(--app-accent)] text-slate-950 shadow-lg"
+                          ? "bg-[var(--app-accent-soft)] text-[var(--app-text)] shadow-sm ring-1 ring-[var(--app-accent)]/40"
                           : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
                       }`}
                     >
@@ -1156,7 +1248,7 @@ export default function BarcodeQrGeneratorApp() {
                         onClick={() => setBulkType("barcode")}
                         className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition ${
                           bulkType === "barcode"
-                            ? "bg-[var(--app-accent)] text-slate-950 shadow-lg"
+                            ? "bg-[var(--app-accent-soft)] text-[var(--app-text)] shadow-sm ring-1 ring-[var(--app-accent)]/40"
                             : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
                         }`}
                       >
@@ -1166,7 +1258,7 @@ export default function BarcodeQrGeneratorApp() {
                         onClick={() => setBulkType("qr")}
                         className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition ${
                           bulkType === "qr"
-                            ? "bg-[var(--app-accent)] text-slate-950 shadow-lg"
+                            ? "bg-[var(--app-accent-soft)] text-[var(--app-text)] shadow-sm ring-1 ring-[var(--app-accent)]/40"
                             : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
                         }`}
                       >
@@ -1300,7 +1392,7 @@ export default function BarcodeQrGeneratorApp() {
                           }
                           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold transition ${
                             background === "transparent"
-                              ? "bg-[var(--app-accent)] text-slate-950"
+                              ? "bg-[var(--app-accent-soft)] text-[var(--app-text)] ring-1 ring-[var(--app-accent)]/40"
                               : "border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-muted)] hover:text-[var(--app-text)]"
                           }`}
                         >
@@ -1347,6 +1439,7 @@ export default function BarcodeQrGeneratorApp() {
                         value={size}
                         onChange={(e) => setSize(e.target.value)}
                         className="w-full"
+                        style={{ background: `linear-gradient(to right, var(--app-accent) ${((size-220)/(620-220)*100).toFixed(1)}%, var(--app-border) ${((size-220)/(620-220)*100).toFixed(1)}%)` }}
                       />
                     </div>
 
@@ -1361,6 +1454,7 @@ export default function BarcodeQrGeneratorApp() {
                         value={margin}
                         onChange={(e) => setMargin(e.target.value)}
                         className="w-full"
+                        style={{ background: `linear-gradient(to right, var(--app-accent) ${(margin/8*100).toFixed(1)}%, var(--app-border) ${(margin/8*100).toFixed(1)}%)` }}
                       />
                     </div>
                   </div>
@@ -1379,6 +1473,7 @@ export default function BarcodeQrGeneratorApp() {
                           value={columns}
                           onChange={(e) => setColumns(Number(e.target.value))}
                           className="w-full"
+                          style={{ background: `linear-gradient(to right, var(--app-accent) ${((columns-1)/(5-1)*100).toFixed(1)}%, var(--app-border) ${((columns-1)/(5-1)*100).toFixed(1)}%)` }}
                         />
                       </div>
 
@@ -1388,7 +1483,7 @@ export default function BarcodeQrGeneratorApp() {
                             type="checkbox"
                             checked={showBulkValue}
                             onChange={(e) => setShowBulkValue(e.target.checked)}
-                            className="accent-cyan-400"
+                            className=""
                           />
                           Show value below barcode
                         </label>
@@ -1399,7 +1494,7 @@ export default function BarcodeQrGeneratorApp() {
                             type="checkbox"
                             checked={showQrValue}
                             onChange={(e) => setShowQrValue(e.target.checked)}
-                            className="accent-cyan-400"
+                            className=""
                           />
                           Show value below QR code
                         </label>
@@ -1424,7 +1519,7 @@ export default function BarcodeQrGeneratorApp() {
                   <div className="flex flex-wrap gap-2 pt-1">
                     <Button
                       onClick={downloadPng}
-                      className="rounded-2xl bg-[var(--app-accent)] px-4 font-bold text-slate-950 hover:opacity-90"
+                      className="rounded-2xl bg-[var(--app-accent-soft)] px-4 font-bold text-[var(--app-text)] ring-1 ring-[var(--app-accent)]/40 hover:bg-[var(--app-accent)]/20"
                     >
                       <Download className="mr-2 h-4 w-4" />
                       {mode === "bulk" ? (bulkType === "qr" ? "Sheet PNG" : "Sheet PNG") : "PNG"}
@@ -1537,7 +1632,7 @@ export default function BarcodeQrGeneratorApp() {
                             bulkType === "qr" ? (
                               <div
                                 key={`${item}-${index}`}
-                                className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-3"
+                                className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3"
                               >
                                 {/* wrapper keeps the QR square regardless of container width */}
                                 <div className="aspect-square w-full">
@@ -1557,7 +1652,7 @@ export default function BarcodeQrGeneratorApp() {
                             ) : (
                               <div
                                 key={`${item}-${index}`}
-                                className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3"
+                                className="flex flex-col items-center justify-center rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3"
                                 style={{ minHeight: Math.max(110, size * 0.42) + 36 + "px" }}
                               >
                                 <BarcodePreview
@@ -1588,7 +1683,7 @@ export default function BarcodeQrGeneratorApp() {
         </div>
       </section>
 
-      <footer className="relative z-10 w-full border-t border-white/30 bg-white/10 backdrop-blur-3xl dark:border-white/10 dark:bg-white/[0.04]">
+      <footer className="relative z-10 w-full border-t border-[var(--app-border)] bg-[var(--app-panel)] backdrop-blur-3xl">
         <div className="mx-auto flex max-w-[1800px] flex-col items-center justify-between gap-3 px-6 py-4 sm:flex-row sm:gap-2">
           <p className="text-xs text-[var(--app-muted)]">
             © {new Date().getFullYear()} BarData. All rights reserved.
@@ -1605,7 +1700,7 @@ export default function BarcodeQrGeneratorApp() {
                 <polygon fill="#ffc200" points="251.08 167.29 418.41 167.26 418.41 251.01 251.22 251.01 251.18 418.25 418.29 418.28 418.57 501.84 167.53 501.84 167.42 167.29 251.08 167.29"/>
                 <rect fill="#ffc200" x="585.13" y="0" width=".48" height="501.84"/>
               </svg>
-            Designed &amp; Maintained by The Creative Fella
+            by tcfella.com
           </a>
         </div>
       </footer>
