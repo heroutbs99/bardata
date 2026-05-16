@@ -10,7 +10,6 @@ import {
   Copy,
   Check,
   Layers,
-  FileDown,
   FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -347,6 +346,55 @@ function createBulkExportCanvas({
   return canvas;
 }
 
+function QRCodePreview({ value, size, margin, foreground }) {
+  const canvasRef = useRef(null);
+  useEffect(() => {
+    if (!canvasRef.current || !value) return;
+    QRCode.toCanvas(canvasRef.current, value, {
+      width: Math.max(140, Number(size) * 0.7),
+      margin: Number(margin),
+      color: { dark: foreground, light: "#ffffff" },
+      errorCorrectionLevel: "H",
+    }).catch(() => {});
+  }, [value, size, margin, foreground]);
+  return <canvas ref={canvasRef} className="h-auto w-full max-w-full" />;
+}
+
+async function createQRBulkExportCanvas({ bulkItems, foreground, size, margin, columns }) {
+  const exportColumns = Math.max(1, Number(columns));
+  const qrSize = Math.max(280, Number(size) * 1.4);
+  const qrCanvases = await Promise.all(
+    bulkItems.map((item) => createQrCanvas(item, { foreground, size: qrSize, margin, exportScale: 1 }))
+  );
+  const cellSize = Math.max(360, qrSize + 120);
+  const gap = 28;
+  const padding = 48;
+  const headerHeight = 124;
+  const footerHeight = 76;
+  const rows = Math.max(1, Math.ceil(bulkItems.length / exportColumns));
+  const width = padding * 2 + exportColumns * cellSize + (exportColumns - 1) * gap;
+  const height = headerHeight + padding + rows * cellSize + (rows - 1) * gap + footerHeight;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  drawBrandHeader(ctx, width);
+  qrCanvases.forEach((qrCanvas, index) => {
+    const col = index % exportColumns;
+    const row = Math.floor(index / exportColumns);
+    const x = padding + col * (cellSize + gap);
+    const y = headerHeight + padding + row * (cellSize + gap);
+    drawCard(ctx, x, y, cellSize, cellSize);
+    const qx = x + (cellSize - qrCanvas.width) / 2;
+    const qy = y + (cellSize - qrCanvas.height) / 2;
+    ctx.drawImage(qrCanvas, qx, qy);
+  });
+  drawBrandFooter(ctx, width, height);
+  return canvas;
+}
+
 function BarcodePreview({
   value,
   format,
@@ -385,6 +433,7 @@ function BarcodePreview({
 
 export default function BarcodeQrGeneratorApp() {
   const [mode, setMode] = useState("bulk");
+  const [bulkType, setBulkType] = useState("barcode");
   const [value, setValue] = useState("https://example.com");
   const [bulkValues, setBulkValues] = useState(
     "SKU-1001\nSKU-1002\nSKU-1003\nSKU-1004\nSKU-1005\nSKU-1006"
@@ -404,6 +453,7 @@ export default function BarcodeQrGeneratorApp() {
   const barcodeRef = useRef(null);
   const previewRef = useRef(null);
   const bulkSheetRef = useRef(null);
+  const previewContainerRef = useRef(null);
 
   const bulkItems = useMemo(() => getBulkItems(bulkValues), [bulkValues]);
   const fileBase = useMemo(() => safeFileName(`${mode}-${value}`), [mode, value]);
@@ -469,8 +519,53 @@ export default function BarcodeQrGeneratorApp() {
     setBulkErrors([]);
   }, [mode, bulkValues, barcodeFormat]);
 
+  // Scroll behaviour: when mouse is OVER the preview, the preview scrolls;
+  // when mouse is NOT over it, wheel events propagate naturally to the page.
+  useEffect(() => {
+    const container = previewContainerRef.current;
+    if (!container) return;
+
+    let over = false;
+    const onEnter = () => { over = true; };
+    const onLeave = () => { over = false; };
+
+    const onWheel = (e) => {
+      if (!over) return; // mouse not over preview — let the page handle it
+
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const canScrollUp   = scrollTop > 0;
+      const canScrollDown = scrollTop + clientHeight < scrollHeight - 1;
+
+      if ((e.deltaY < 0 && !canScrollUp) || (e.deltaY > 0 && !canScrollDown)) {
+        // Preview is at its scroll limit — let the event bubble to the page
+        return;
+      }
+
+      // Preview still has room to scroll — consume the event
+      e.preventDefault();
+      const px =
+        e.deltaMode === 1
+          ? e.deltaY * 20
+          : e.deltaMode === 2
+            ? e.deltaY * clientHeight
+            : e.deltaY;
+      container.scrollTop += px;
+    };
+
+    container.addEventListener('mouseenter', onEnter);
+    container.addEventListener('mouseleave', onLeave);
+    container.addEventListener('wheel', onWheel, { passive: false });
+
+    return () => {
+      container.removeEventListener('mouseenter', onEnter);
+      container.removeEventListener('mouseleave', onLeave);
+      container.removeEventListener('wheel', onWheel);
+    };
+  }, []);
+
   const reset = () => {
     setMode("bulk");
+    setBulkType("barcode");
     setValue("https://example.com");
     setBulkValues("SKU-1001\nSKU-1002\nSKU-1003\nSKU-1004\nSKU-1005\nSKU-1006");
     setBarcodeFormat("CODE128");
@@ -494,28 +589,16 @@ export default function BarcodeQrGeneratorApp() {
     try {
       const canvas =
         mode === "bulk"
-          ? createBulkExportCanvas({
-              bulkItems,
-              barcodeFormat,
-              foreground,
-              size,
-              margin,
-              columns,
-              showBulkValue,
-            })
-          : await createSingleExportCanvas({
-              mode,
-              value,
-              barcodeFormat,
-              foreground,
-              background,
-              size,
-              margin,
-            });
+          ? bulkType === "qr"
+            ? await createQRBulkExportCanvas({ bulkItems, foreground, size, margin, columns })
+            : createBulkExportCanvas({ bulkItems, barcodeFormat, foreground, size, margin, columns, showBulkValue })
+          : await createSingleExportCanvas({ mode, value, barcodeFormat, foreground, background, size, margin });
 
       downloadDataUrl(
         canvas.toDataURL("image/png"),
-        mode === "bulk" ? "bardata-bulk-barcodes.png" : `${fileBase}-bardata.png`
+        mode === "bulk"
+          ? bulkType === "qr" ? "bardata-bulk-qr.png" : "bardata-bulk-barcodes.png"
+          : `${fileBase}-bardata.png`
       );
     } catch (err) {
       console.error("PNG export failed:", err);
@@ -589,13 +672,59 @@ export default function BarcodeQrGeneratorApp() {
       }
 
       const exportColumns = Math.max(1, Number(columns));
-      const cellWidth = 560;
-      const cellHeight = 250;
       const gap = 28;
       const padding = 48;
       const headerHeight = 124;
       const footerHeight = 76;
       const rows = Math.max(1, Math.ceil(bulkItems.length / exportColumns));
+
+      if (bulkType === "qr") {
+        const qrSvgStrings = await Promise.all(
+          bulkItems.map((item) =>
+            QRCode.toString(item, {
+              type: "svg",
+              margin: Number(margin),
+              color: { dark: foreground, light: "#ffffff" },
+              errorCorrectionLevel: "H",
+            })
+          )
+        );
+        const cellSize = Math.max(280, Number(size) + 120);
+        const width = padding * 2 + exportColumns * cellSize + (exportColumns - 1) * gap;
+        const height = headerHeight + padding + rows * cellSize + (rows - 1) * gap + footerHeight;
+        const cells = qrSvgStrings
+          .map((qrSvg, index) => {
+            const viewBoxMatch = qrSvg.match(/viewBox="([^"]+)"/);
+            const qrViewBox = viewBoxMatch ? viewBoxMatch[1] : "0 0 200 200";
+            const qrInner = qrSvg.replace(/<\?xml[^>]*\?>\s*/g, "").replace(/<!DOCTYPE[^>]*>\s*/g, "").replace(/<svg[^>]*>/, "").replace(/<\/svg>/, "");
+            const col = index % exportColumns;
+            const row = Math.floor(index / exportColumns);
+            const x = padding + col * (cellSize + gap);
+            const y = headerHeight + padding + row * (cellSize + gap);
+            const innerSize = cellSize - 60;
+            return `
+              <rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" rx="28" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+              <svg x="${x + 30}" y="${y + 30}" width="${innerSize}" height="${innerSize}" viewBox="${qrViewBox}" xmlns="http://www.w3.org/2000/svg">
+                ${qrInner}
+              </svg>`;
+          })
+          .join("\n");
+        const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="${width}" height="${height}" fill="#ffffff"/>
+  ${makeSvgBrandHeader(width)}
+  ${cells}
+  ${makeSvgFooter(width, height)}
+</svg>`;
+        downloadText(svg, "bardata-bulk-qr.svg");
+        return;
+      }
+
+      const previewBarcode = bulkItems.length
+        ? makeBarcodeSvg(bulkItems[0], { format: barcodeFormat, foreground, size, margin, showValue: showBulkValue })
+        : null;
+      const cellWidth = Math.max(400, (previewBarcode?.width || 400) + 100);
+      const cellHeight = Math.max(180, (previewBarcode?.height || 150) + 80);
       const width = padding * 2 + exportColumns * cellWidth + (exportColumns - 1) * gap;
       const height = headerHeight + padding + rows * cellHeight + (rows - 1) * gap + footerHeight;
 
@@ -614,13 +743,11 @@ export default function BarcodeQrGeneratorApp() {
           const y = headerHeight + padding + row * (cellHeight + gap);
           const bx = x + (cellWidth - barcode.width) / 2;
           const by = y + (cellHeight - barcode.height) / 2;
-
           return `
             <rect x="${x}" y="${y}" width="${cellWidth}" height="${cellHeight}" rx="28" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
             <g transform="translate(${bx} ${by})">
               ${barcode.inner}
-            </g>
-          `;
+            </g>`;
         })
         .join("\n");
 
@@ -639,28 +766,13 @@ export default function BarcodeQrGeneratorApp() {
     }
   };
 
-  const downloadCsv = () => {
-    const csvRows = [
-      "value",
-      ...bulkItems.map((item) => `"${item.replace(/"/g, '""')}"`),
-    ];
-
-    downloadText(csvRows.join("\n"), "bardata-bulk-barcode-values.csv", "text/csv");
-  };
-
   const downloadBulkPdf = async () => {
     if (mode !== "bulk" || bulkErrors.length) return;
 
     try {
-      const canvas = createBulkExportCanvas({
-        bulkItems,
-        barcodeFormat,
-        foreground,
-        size,
-        margin,
-        columns,
-        showBulkValue,
-      });
+      const canvas = bulkType === "qr"
+        ? await createQRBulkExportCanvas({ bulkItems, foreground, size, margin, columns })
+        : createBulkExportCanvas({ bulkItems, barcodeFormat, foreground, size, margin, columns, showBulkValue });
 
       const pdf = new jsPDF("p", "mm", "a4");
       const pageWidthMm = pdf.internal.pageSize.getWidth();
@@ -720,7 +832,7 @@ export default function BarcodeQrGeneratorApp() {
   };
 
   return (
-    <main className="soft-texture relative min-h-screen overflow-hidden bg-[var(--app-bg)] font-sans text-[var(--app-text)] transition-colors duration-300 xl:overflow-visible">
+    <main className="soft-texture relative min-h-screen overflow-clip bg-[var(--app-bg)] font-sans text-[var(--app-text)] transition-colors duration-300">
       <style jsx global>{`
         :root {
           --app-bg: #eef7ff;
@@ -842,7 +954,7 @@ export default function BarcodeQrGeneratorApp() {
         }
       `}</style>
 
-      <section className="relative mx-auto flex min-h-screen w-full max-w-[1800px] flex-col overflow-hidden px-4 py-4 sm:px-5 lg:px-7 xl:min-h-0 xl:overflow-visible xl:px-8">
+      <section className="relative mx-auto flex min-h-screen w-full max-w-[1800px] flex-col overflow-clip px-4 py-4 sm:px-5 lg:px-7 xl:min-h-0 xl:px-8">
         <div className="pointer-events-none absolute left-[-120px] top-[-120px] h-[340px] w-[340px] rounded-full bg-cyan-400/20 blur-3xl" />
         <div className="pointer-events-none absolute bottom-[-140px] right-[-120px] h-[420px] w-[420px] rounded-full bg-blue-500/10 blur-3xl" />
 
@@ -961,6 +1073,31 @@ export default function BarcodeQrGeneratorApp() {
                     </button>
                   </div>
 
+                  {mode === "bulk" && (
+                    <div className="grid grid-cols-2 gap-2 rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-1.5 backdrop-blur-xl">
+                      <button
+                        onClick={() => setBulkType("barcode")}
+                        className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition ${
+                          bulkType === "barcode"
+                            ? "bg-[var(--app-accent)] text-slate-950 shadow-lg"
+                            : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
+                        }`}
+                      >
+                        <Barcode size={15} /> Barcode
+                      </button>
+                      <button
+                        onClick={() => setBulkType("qr")}
+                        className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition ${
+                          bulkType === "qr"
+                            ? "bg-[var(--app-accent)] text-slate-950 shadow-lg"
+                            : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
+                        }`}
+                      >
+                        <QrCode size={15} /> QR Code
+                      </button>
+                    </div>
+                  )}
+
                   {mode === "qr" && (
                     <div className="space-y-2">
                       <label className="text-sm font-bold text-[var(--app-text)]">
@@ -983,7 +1120,7 @@ export default function BarcodeQrGeneratorApp() {
                     </div>
                   )}
 
-                  {(mode === "barcode" || mode === "bulk") && (
+                  {(mode === "barcode" || (mode === "bulk" && bulkType === "barcode")) && (
                     <div className="space-y-2">
                       <label className="text-sm font-bold text-[var(--app-text)]">
                         Barcode format
@@ -1137,15 +1274,17 @@ export default function BarcodeQrGeneratorApp() {
                         />
                       </div>
 
-                      <label className="flex items-center gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm font-medium text-[var(--app-text)]">
-                        <input
-                          type="checkbox"
-                          checked={showBulkValue}
-                          onChange={(e) => setShowBulkValue(e.target.checked)}
-                          className="accent-cyan-400"
-                        />
-                        Show value below barcode
-                      </label>
+                      {bulkType === "barcode" && (
+                        <label className="flex items-center gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm font-medium text-[var(--app-text)]">
+                          <input
+                            type="checkbox"
+                            checked={showBulkValue}
+                            onChange={(e) => setShowBulkValue(e.target.checked)}
+                            className="accent-cyan-400"
+                          />
+                          Show value below barcode
+                        </label>
+                      )}
                     </div>
                   )}
 
@@ -1169,7 +1308,7 @@ export default function BarcodeQrGeneratorApp() {
                       className="rounded-2xl bg-[var(--app-accent)] px-4 font-bold text-slate-950 hover:opacity-90"
                     >
                       <Download className="mr-2 h-4 w-4" />
-                      {mode === "bulk" ? "Sheet PNG" : "PNG"}
+                      {mode === "bulk" ? (bulkType === "qr" ? "Sheet PNG" : "Sheet PNG") : "PNG"}
                     </Button>
 
                     <Button
@@ -1192,14 +1331,6 @@ export default function BarcodeQrGeneratorApp() {
                           PDF
                         </Button>
 
-                        <Button
-                          onClick={downloadCsv}
-                          variant="secondary"
-                          className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 font-bold text-[var(--app-text)] hover:bg-[var(--app-surface-2)]"
-                        >
-                          <FileDown className="mr-2 h-4 w-4" />
-                          CSV
-                        </Button>
                       </>
                     )}
 
@@ -1221,10 +1352,10 @@ export default function BarcodeQrGeneratorApp() {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.05 }}
-            className="min-h-0 min-w-0"
+            className="min-h-0 min-w-0 xl:flex xl:flex-col xl:self-stretch"
           >
-            <Card className="glass-card h-auto overflow-hidden rounded-[2rem] border border-[var(--app-border)] shadow-[var(--app-shadow)]">
-              <CardContent className="flex h-auto flex-col gap-4 p-4 md:p-5 xl:p-6">
+            <Card className="glass-card h-auto overflow-hidden rounded-[2rem] border border-[var(--app-border)] shadow-[var(--app-shadow)] xl:flex xl:h-full xl:flex-col">
+              <CardContent className="flex h-auto flex-col gap-4 p-4 md:p-5 xl:flex-1 xl:p-6">
                 <div className="flex shrink-0 flex-col gap-3 md:flex-row md:items-end md:justify-between">
                   <div>
                     <h2 className="text-2xl font-black tracking-[-0.03em] text-[var(--app-text)] md:text-3xl">
@@ -1237,18 +1368,21 @@ export default function BarcodeQrGeneratorApp() {
 
                   <div className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm text-[var(--app-muted)] md:w-auto">
                     {mode === "bulk"
-                      ? `${bulkItems.length} bulk items`
+                      ? `${bulkItems.length} bulk ${bulkType === "qr" ? "QR codes" : "barcodes"}`
                       : mode === "qr"
                         ? "QR export"
                         : `${barcodeFormat} export`}
                   </div>
                 </div>
 
-                <div className="min-h-[560px] flex-1 overflow-x-hidden rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-3 shadow-inner backdrop-blur-xl md:min-h-[680px] md:p-5 xl:min-h-[500px] xl:max-h-[calc(100vh-220px)] xl:overflow-y-auto xl:p-7">
+                <div
+                  ref={previewContainerRef}
+                  className="min-h-[560px] flex-1 overflow-x-hidden overflow-y-auto rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-3 shadow-inner backdrop-blur-xl md:min-h-[680px] md:p-5 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:p-7"
+                >
                   {mode !== "bulk" ? (
                     <div
                       ref={previewRef}
-                      className="flex min-h-[520px] w-full items-center justify-center rounded-[1.65rem] p-6 shadow-sm md:min-h-[680px] md:p-8 xl:min-h-[760px]"
+                      className="flex min-h-[520px] w-full items-center justify-center rounded-[1.65rem] p-6 shadow-sm md:min-h-[680px] md:p-8 xl:min-h-0 xl:flex-1"
                       style={{ backgroundColor: background }}
                     >
                       {mode === "qr" ? (
@@ -1256,7 +1390,7 @@ export default function BarcodeQrGeneratorApp() {
                           <img
                             src={qrDataUrl}
                             alt="Generated QR code"
-                            className="h-auto w-full max-w-[min(620px,90%)]"
+                            className="h-auto w-full max-w-[min(480px,90%)] xl:max-h-[70vh] xl:w-auto xl:max-w-[min(480px,90%)]"
                           />
                         ) : (
                           <div className="text-center text-slate-500">
@@ -1264,7 +1398,7 @@ export default function BarcodeQrGeneratorApp() {
                           </div>
                         )
                       ) : (
-                        <div className="w-full max-w-[820px]">
+                        <div className="w-full max-w-[680px]">
                           <svg ref={barcodeRef} className="h-auto w-full max-w-full" />
                         </div>
                       )}
@@ -1281,21 +1415,36 @@ export default function BarcodeQrGeneratorApp() {
                           style={{ "--bulk-columns": columns }}
                         >
                           {bulkItems.map((item, index) => (
-                            <div
-                              key={`${item}-${index}`}
-                              className="flex min-h-[165px] flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-4 sm:min-h-[190px] sm:p-5"
-                            >
-                              <BarcodePreview
-                                value={item}
-                                format={barcodeFormat}
-                                foreground={foreground}
-                                background="#ffffff"
-                                size={size}
-                                margin={margin}
-                                showValue={showBulkValue}
-                                onError={addBulkError}
-                              />
-                            </div>
+                            bulkType === "qr" ? (
+                              <div
+                                key={`${item}-${index}`}
+                                className="flex aspect-square flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-3"
+                              >
+                                <QRCodePreview
+                                  value={item}
+                                  size={size}
+                                  margin={margin}
+                                  foreground={foreground}
+                                />
+                              </div>
+                            ) : (
+                              <div
+                                key={`${item}-${index}`}
+                                className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3"
+                                style={{ minHeight: Math.max(110, size * 0.42) + 36 + "px" }}
+                              >
+                                <BarcodePreview
+                                  value={item}
+                                  format={barcodeFormat}
+                                  foreground={foreground}
+                                  background="#ffffff"
+                                  size={size}
+                                  margin={margin}
+                                  showValue={showBulkValue}
+                                  onError={addBulkError}
+                                />
+                              </div>
+                            )
                           ))}
                         </div>
                       ) : (
@@ -1323,7 +1472,12 @@ export default function BarcodeQrGeneratorApp() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded-full border border-[var(--app-border)] bg-[var(--app-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--app-muted)] transition hover:border-[var(--app-accent)] hover:text-[var(--app-text)]"
           >
-            <img src="/tcf-logo.svg" alt="The Creative Fella" className="h-4 w-4 object-contain" />
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 585.61 501.84" className="h-4 w-4 shrink-0" aria-hidden="true">
+                <path fill="white" d="M585.13,0v501.84s-83.04,0-83.04,0l-.18-250.85-83.5.03v-83.75s83.5.04,83.5.04l-.02-83.62h-250.79s-.03,83.61-.03,83.61h-83.66s-.01-83.61-.01-83.61H.5c-.78-1.29-.03-2.26-.02-3.56L.49,0h584.64Z"/>
+                <polygon fill="#ffc200" points="84.01 501.84 0 501.84 .11 418.28 83.83 418.28 84.01 501.84"/>
+                <polygon fill="#ffc200" points="251.08 167.29 418.41 167.26 418.41 251.01 251.22 251.01 251.18 418.25 418.29 418.28 418.57 501.84 167.53 501.84 167.42 167.29 251.08 167.29"/>
+                <rect fill="#ffc200" x="585.13" y="0" width=".48" height="501.84"/>
+              </svg>
             Designed &amp; maintained by The Creative Fella
           </a>
         </div>
