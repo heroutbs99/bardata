@@ -18,7 +18,7 @@ import { Card, CardContent } from "@/components/ui/card";
 
 import QRCode from "qrcode";
 import JsBarcode from "jsbarcode";
-import { toPng, toSvg, toCanvas } from "html-to-image";
+
 import jsPDF from "jspdf";
 
 const barcodeFormats = [
@@ -32,7 +32,7 @@ const barcodeFormats = [
 
 const qrPresets = [
   { label: "Website URL", value: "https://example.com" },
-  { label: "Plain text", value: "Hello from Bar/Data" },
+  { label: "Plain text", value: "Hello from BarData" },
   { label: "Email", value: "mailto:hello@example.com" },
   { label: "Phone", value: "tel:+15195550123" },
   { label: "Wi-Fi", value: "WIFI:T:WPA;S:NetworkName;P:Password123;;" },
@@ -70,6 +70,281 @@ function getBulkItems(text) {
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function escapeXml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function drawRoundedRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+function drawBrandHeader(ctx, width, title = "BarData") {
+  const logoX = 44;
+  const logoY = 32;
+
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(logoX, logoY, 5, 36);
+  ctx.fillRect(logoX + 10, logoY, 3, 36);
+  ctx.fillRect(logoX + 18, logoY, 8, 36);
+  ctx.fillRect(logoX + 32, logoY, 4, 36);
+  ctx.fillStyle = "#06b6d4";
+  ctx.fillRect(logoX + 44, logoY, 8, 36);
+
+  ctx.fillStyle = "#0f172a";
+  ctx.font = "900 34px Arial, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText(title, logoX + 74, logoY + 28);
+
+  ctx.fillStyle = "#64748b";
+  ctx.font = "600 15px Arial, sans-serif";
+  ctx.fillText("QR Code & Barcode Generator", logoX + 74, logoY + 52);
+
+  ctx.fillStyle = "#64748b";
+  ctx.font = "700 13px Arial, sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText("GENERATED EXPORT", width - 44, logoY + 28);
+
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(36, 104);
+  ctx.lineTo(width - 36, 104);
+  ctx.stroke();
+}
+
+function drawBrandFooter(ctx, width, height) {
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(36, height - 58);
+  ctx.lineTo(width - 36, height - 58);
+  ctx.stroke();
+
+  ctx.fillStyle = "#64748b";
+  ctx.font = "600 14px Arial, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("Generated with BarData", width / 2, height - 24);
+}
+
+function createBarcodeCanvas(value, options) {
+  const canvas = document.createElement("canvas");
+
+  const sizeValue = Number(options.size) || 320;
+  const marginValue = Number(options.margin) || 2;
+  const exportScale = options.exportScale || 1;
+
+  const barcodeWidth = Math.max(1.6, (sizeValue / 320) * 2.8) * exportScale;
+  const barcodeHeight = Math.max(90, sizeValue * 0.58) * exportScale;
+  const barcodeFontSize = Math.max(14, sizeValue * 0.07) * exportScale;
+  const barcodeMargin = marginValue * 18 * exportScale;
+
+  JsBarcode(canvas, value, {
+    format: options.format,
+    lineColor: options.foreground,
+    background: "#ffffff",
+    width: barcodeWidth,
+    height: barcodeHeight,
+    displayValue: options.showValue,
+    fontSize: barcodeFontSize,
+    margin: barcodeMargin,
+  });
+
+  return canvas;
+}
+
+async function createQrCanvas(value, options) {
+  const canvas = document.createElement("canvas");
+
+  const sizeValue = Number(options.size) || 360;
+  const marginValue = Number(options.margin) || 2;
+  const exportScale = options.exportScale || 1;
+
+  await QRCode.toCanvas(canvas, value, {
+    width: Math.max(220, sizeValue) * exportScale,
+    margin: marginValue,
+    color: {
+      dark: options.foreground,
+      light: "#ffffff",
+    },
+    errorCorrectionLevel: "H",
+  });
+
+  return canvas;
+}
+
+function drawCard(ctx, x, y, width, height) {
+  ctx.fillStyle = "#ffffff";
+  drawRoundedRect(ctx, x, y, width, height, 28);
+  ctx.fill();
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+async function createSingleExportCanvas({ mode, value, barcodeFormat, foreground, background, size, margin }) {
+  const contentCanvas =
+    mode === "qr"
+      ? await createQrCanvas(value, { foreground, background, size, margin })
+      : createBarcodeCanvas(value, {
+          format: barcodeFormat,
+          foreground,
+          background,
+          size,
+          margin,
+          showValue: true,
+          exportScale: 2,
+        });
+
+  const width = Math.max(900, contentCanvas.width + 180);
+  const cardWidth = width - 120;
+  const cardHeight = contentCanvas.height + 120;
+  const height = 124 + cardHeight + 82;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  drawBrandHeader(ctx, width);
+
+  const cardX = 60;
+  const cardY = 124;
+  drawCard(ctx, cardX, cardY, cardWidth, cardHeight);
+
+  const contentX = cardX + (cardWidth - contentCanvas.width) / 2;
+  const contentY = cardY + (cardHeight - contentCanvas.height) / 2;
+  ctx.drawImage(contentCanvas, contentX, contentY);
+
+  drawBrandFooter(ctx, width, height);
+  return canvas;
+}
+
+function makeSvgBrandHeader(width) {
+  return `
+    <rect width="${width}" height="124" fill="#ffffff"/>
+    <rect x="44" y="32" width="5" height="36" fill="#0f172a"/>
+    <rect x="54" y="32" width="3" height="36" fill="#0f172a"/>
+    <rect x="62" y="32" width="8" height="36" fill="#0f172a"/>
+    <rect x="76" y="32" width="4" height="36" fill="#0f172a"/>
+    <rect x="88" y="32" width="8" height="36" fill="#06b6d4"/>
+    <text x="118" y="60" font-family="Arial, sans-serif" font-size="34" font-weight="900" fill="#0f172a">BarData</text>
+    <text x="118" y="84" font-family="Arial, sans-serif" font-size="15" font-weight="600" fill="#64748b">QR Code &amp; Barcode Generator</text>
+    <text x="${width - 44}" y="60" text-anchor="end" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#64748b">GENERATED EXPORT</text>
+    <line x1="36" y1="104" x2="${width - 36}" y2="104" stroke="#e2e8f0"/>
+  `;
+}
+
+function makeSvgFooter(width, height) {
+  return `
+    <line x1="36" y1="${height - 58}" x2="${width - 36}" y2="${height - 58}" stroke="#e2e8f0"/>
+    <text x="${width / 2}" y="${height - 24}" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="600" fill="#64748b">Generated with BarData</text>
+  `;
+}
+
+function makeBarcodeSvg(value, options) {
+  const tempSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  JsBarcode(tempSvg, value, {
+    format: options.format,
+    lineColor: options.foreground,
+    background: "#ffffff",
+    width: 2.2,
+    height: Math.max(120, Number(options.size) * 0.42),
+    displayValue: options.showValue,
+    fontSize: 18,
+    margin: Number(options.margin) * 10,
+  });
+
+  return {
+    width: Number(tempSvg.getAttribute("width") || 420),
+    height: Number(tempSvg.getAttribute("height") || 180),
+    inner: tempSvg.innerHTML,
+  };
+}
+
+function createBulkExportCanvas({
+  bulkItems,
+  barcodeFormat,
+  foreground,
+  size,
+  margin,
+  columns,
+  showBulkValue,
+}) {
+  const exportColumns = Math.max(1, Number(columns));
+  const exportScale = 1.8;
+  const previewBarcode = bulkItems.length
+    ? createBarcodeCanvas(bulkItems[0], {
+        format: barcodeFormat,
+        foreground,
+        size,
+        margin,
+        showValue: showBulkValue,
+        exportScale,
+      })
+    : null;
+
+  const cellWidth = Math.max(620, (previewBarcode?.width || 620) + 130);
+  const cellHeight = Math.max(280, (previewBarcode?.height || 180) + 130);
+  const gap = 28;
+  const padding = 48;
+  const headerHeight = 124;
+  const footerHeight = 76;
+  const rows = Math.max(1, Math.ceil(bulkItems.length / exportColumns));
+  const width = padding * 2 + exportColumns * cellWidth + (exportColumns - 1) * gap;
+  const height = headerHeight + padding + rows * cellHeight + (rows - 1) * gap + footerHeight;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  drawBrandHeader(ctx, width);
+
+  bulkItems.forEach((item, index) => {
+    const col = index % exportColumns;
+    const row = Math.floor(index / exportColumns);
+    const x = padding + col * (cellWidth + gap);
+    const y = headerHeight + padding + row * (cellHeight + gap);
+
+    drawCard(ctx, x, y, cellWidth, cellHeight);
+
+    const barcodeCanvas = createBarcodeCanvas(item, {
+      format: barcodeFormat,
+      foreground,
+      background: "#ffffff",
+      size,
+      margin,
+      showValue: showBulkValue,
+      exportScale,
+    });
+
+    const bx = x + (cellWidth - barcodeCanvas.width) / 2;
+    const by = y + (cellHeight - barcodeCanvas.height) / 2;
+    ctx.drawImage(barcodeCanvas, bx, by);
+  });
+
+  drawBrandFooter(ctx, width, height);
+  return canvas;
 }
 
 function BarcodePreview({
@@ -216,40 +491,152 @@ export default function BarcodeQrGeneratorApp() {
   };
 
   const downloadPng = async () => {
-    const target = mode === "bulk" ? bulkSheetRef.current : previewRef.current;
+    try {
+      const canvas =
+        mode === "bulk"
+          ? createBulkExportCanvas({
+              bulkItems,
+              barcodeFormat,
+              foreground,
+              size,
+              margin,
+              columns,
+              showBulkValue,
+            })
+          : await createSingleExportCanvas({
+              mode,
+              value,
+              barcodeFormat,
+              foreground,
+              background,
+              size,
+              margin,
+            });
 
-    if (!target || error) return;
-
-    const dataUrl = await toPng(target, {
-      pixelRatio: 3,
-      backgroundColor: background,
-    });
-
-    downloadDataUrl(
-      dataUrl,
-      mode === "bulk" ? "bulk-barcodes-sheet.png" : `${fileBase}.png`
-    );
+      downloadDataUrl(
+        canvas.toDataURL("image/png"),
+        mode === "bulk" ? "bardata-bulk-barcodes.png" : `${fileBase}-bardata.png`
+      );
+    } catch (err) {
+      console.error("PNG export failed:", err);
+      setError("Could not export PNG. Check the barcode value and format.");
+    }
   };
 
   const downloadSvg = async () => {
-    if (mode === "bulk") {
-      if (!bulkSheetRef.current || bulkErrors.length) return;
+    try {
+      if (mode === "qr") {
+        const qrSvg = await QRCode.toString(value, {
+          type: "svg",
+          margin: Number(margin),
+          color: {
+            dark: foreground,
+            light: background,
+          },
+          errorCorrectionLevel: "H",
+        });
 
-      const svg = await toSvg(bulkSheetRef.current, {
-        backgroundColor: background,
-      });
+        const qrInner = qrSvg.replace(/<svg[^>]*>/, "").replace(/<\/svg>/, "");
+        const width = 900;
+        const height = 880;
 
-      downloadText(svg, "bulk-barcodes-sheet.svg");
-      return;
+        const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="${width}" height="${height}" fill="#ffffff"/>
+  ${makeSvgBrandHeader(width)}
+  <rect x="120" y="150" width="660" height="620" rx="28" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+  <g transform="translate(210 205) scale(1.6)">
+    ${qrInner}
+  </g>
+  ${makeSvgFooter(width, height)}
+</svg>`;
+
+        downloadText(svg, `${fileBase}-bardata.svg`);
+        return;
+      }
+
+      if (mode === "barcode") {
+        const barcode = makeBarcodeSvg(value, {
+          format: barcodeFormat,
+          foreground,
+          size,
+          margin,
+          showValue: true,
+          exportScale: 2,
+        });
+        const width = Math.max(900, barcode.width + 180);
+        const cardWidth = width - 120;
+        const cardHeight = barcode.height + 120;
+        const height = 124 + cardHeight + 82;
+        const x = 60;
+        const y = 124;
+        const bx = x + (cardWidth - barcode.width) / 2;
+        const by = y + (cardHeight - barcode.height) / 2;
+
+        const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="${width}" height="${height}" fill="#ffffff"/>
+  ${makeSvgBrandHeader(width)}
+  <rect x="${x}" y="${y}" width="${cardWidth}" height="${cardHeight}" rx="28" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+  <g transform="translate(${bx} ${by})">
+    ${barcode.inner}
+  </g>
+  ${makeSvgFooter(width, height)}
+</svg>`;
+
+        downloadText(svg, `${fileBase}-bardata.svg`);
+        return;
+      }
+
+      const exportColumns = Math.max(1, Number(columns));
+      const cellWidth = 560;
+      const cellHeight = 250;
+      const gap = 28;
+      const padding = 48;
+      const headerHeight = 124;
+      const footerHeight = 76;
+      const rows = Math.max(1, Math.ceil(bulkItems.length / exportColumns));
+      const width = padding * 2 + exportColumns * cellWidth + (exportColumns - 1) * gap;
+      const height = headerHeight + padding + rows * cellHeight + (rows - 1) * gap + footerHeight;
+
+      const cells = bulkItems
+        .map((item, index) => {
+          const barcode = makeBarcodeSvg(item, {
+            format: barcodeFormat,
+            foreground,
+            size,
+            margin,
+            showValue: showBulkValue,
+          });
+          const col = index % exportColumns;
+          const row = Math.floor(index / exportColumns);
+          const x = padding + col * (cellWidth + gap);
+          const y = headerHeight + padding + row * (cellHeight + gap);
+          const bx = x + (cellWidth - barcode.width) / 2;
+          const by = y + (cellHeight - barcode.height) / 2;
+
+          return `
+            <rect x="${x}" y="${y}" width="${cellWidth}" height="${cellHeight}" rx="28" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+            <g transform="translate(${bx} ${by})">
+              ${barcode.inner}
+            </g>
+          `;
+        })
+        .join("\n");
+
+      const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="${width}" height="${height}" fill="#ffffff"/>
+  ${makeSvgBrandHeader(width)}
+  ${cells}
+  ${makeSvgFooter(width, height)}
+</svg>`;
+
+      downloadText(svg, "bardata-bulk-barcodes.svg");
+    } catch (err) {
+      console.error("SVG export failed:", err);
+      setError("Could not export SVG. Check the barcode value and format.");
     }
-
-    if (!previewRef.current || error) return;
-
-    const svg = await toSvg(previewRef.current, {
-      backgroundColor: background,
-    });
-
-    downloadText(svg, `${fileBase}.svg`);
   };
 
   const downloadCsv = () => {
@@ -258,65 +645,72 @@ export default function BarcodeQrGeneratorApp() {
       ...bulkItems.map((item) => `"${item.replace(/"/g, '""')}"`),
     ];
 
-    downloadText(csvRows.join("\n"), "bulk-barcode-values.csv", "text/csv");
+    downloadText(csvRows.join("\n"), "bardata-bulk-barcode-values.csv", "text/csv");
   };
 
   const downloadBulkPdf = async () => {
-    if (!bulkSheetRef.current || mode !== "bulk" || bulkErrors.length) return;
+    if (mode !== "bulk" || bulkErrors.length) return;
 
-    const canvas = await toCanvas(bulkSheetRef.current, {
-      pixelRatio: 2,
-      backgroundColor: background,
-    });
+    try {
+      const canvas = createBulkExportCanvas({
+        bulkItems,
+        barcodeFormat,
+        foreground,
+        size,
+        margin,
+        columns,
+        showBulkValue,
+      });
 
-    const pdf = new jsPDF("p", "mm", "a4");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidthMm = pdf.internal.pageSize.getWidth();
+      const pageHeightMm = pdf.internal.pageSize.getHeight();
+      const marginMm = 6;
+      const usableWidthMm = pageWidthMm - marginMm * 2;
+      const usableHeightMm = pageHeightMm - marginMm * 2;
+      const sliceHeightPx = Math.floor((usableHeightMm / usableWidthMm) * canvas.width);
 
-    const marginMm = 10;
-    const pageWidthMm = pdf.internal.pageSize.getWidth();
-    const pageHeightMm = pdf.internal.pageSize.getHeight();
-    const usableWidthMm = pageWidthMm - marginMm * 2;
-    const usableHeightMm = pageHeightMm - marginMm * 2;
+      let positionY = 0;
+      let pageIndex = 0;
 
-    const sliceHeightPx = Math.floor((usableHeightMm / usableWidthMm) * canvas.width);
+      while (positionY < canvas.height) {
+        const currentSliceHeight = Math.min(sliceHeightPx, canvas.height - positionY);
+        const sliceCanvas = document.createElement("canvas");
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = currentSliceHeight;
 
-    let positionY = 0;
-    let pageIndex = 0;
+        const ctx = sliceCanvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+        ctx.drawImage(
+          canvas,
+          0,
+          positionY,
+          canvas.width,
+          currentSliceHeight,
+          0,
+          0,
+          canvas.width,
+          currentSliceHeight
+        );
 
-    while (positionY < canvas.height) {
-      const currentSliceHeight = Math.min(sliceHeightPx, canvas.height - positionY);
+        const imgData = sliceCanvas.toDataURL("image/png");
+        const sliceHeightMm = (currentSliceHeight * usableWidthMm) / canvas.width;
 
-      const sliceCanvas = document.createElement("canvas");
-      sliceCanvas.width = canvas.width;
-      sliceCanvas.height = currentSliceHeight;
+        if (pageIndex > 0) {
+          pdf.addPage();
+        }
 
-      const ctx = sliceCanvas.getContext("2d");
-
-      ctx.drawImage(
-        canvas,
-        0,
-        positionY,
-        canvas.width,
-        currentSliceHeight,
-        0,
-        0,
-        canvas.width,
-        currentSliceHeight
-      );
-
-      const imgData = sliceCanvas.toDataURL("image/png");
-      const sliceHeightMm = (currentSliceHeight * usableWidthMm) / canvas.width;
-
-      if (pageIndex > 0) {
-        pdf.addPage();
+        pdf.addImage(imgData, "PNG", marginMm, marginMm, usableWidthMm, sliceHeightMm);
+        positionY += currentSliceHeight;
+        pageIndex += 1;
       }
 
-      pdf.addImage(imgData, "PNG", marginMm, marginMm, usableWidthMm, sliceHeightMm);
-
-      positionY += currentSliceHeight;
-      pageIndex += 1;
+      pdf.save("bardata-bulk-barcodes.pdf");
+    } catch (err) {
+      console.error("PDF export failed:", err);
+      setError("Could not export PDF. Check the barcode value and format.");
     }
-
-    pdf.save("bulk-barcodes-sheet.pdf");
   };
 
   const addBulkError = (invalidValue) => {
@@ -326,33 +720,33 @@ export default function BarcodeQrGeneratorApp() {
   };
 
   return (
-    <main className="min-h-screen bg-[var(--app-bg)] font-sans text-[var(--app-text)] transition-colors duration-300">
+    <main className="soft-texture relative min-h-screen overflow-hidden bg-[var(--app-bg)] font-sans text-[var(--app-text)] transition-colors duration-300">
       <style jsx global>{`
         :root {
-          --app-bg: #f4f7fb;
-          --app-surface: #ffffff;
-          --app-surface-2: #eef4fb;
-          --app-panel: #f8fafc;
+          --app-bg: #eef7ff;
+          --app-surface: rgba(255, 255, 255, 0.62);
+          --app-surface-2: rgba(255, 255, 255, 0.38);
+          --app-panel: rgba(255, 255, 255, 0.48);
           --app-text: #0f172a;
           --app-muted: #64748b;
-          --app-border: rgba(15, 23, 42, 0.12);
+          --app-border: rgba(15, 23, 42, 0.14);
           --app-accent: #06b6d4;
-          --app-accent-soft: rgba(6, 182, 212, 0.12);
-          --app-shadow: 0 24px 80px rgba(15, 23, 42, 0.12);
+          --app-accent-soft: rgba(6, 182, 212, 0.14);
+          --app-shadow: 0 24px 90px rgba(15, 23, 42, 0.14);
         }
 
         @media (prefers-color-scheme: dark) {
           :root {
-            --app-bg: #050816;
-            --app-surface: #111827;
-            --app-surface-2: #0b1222;
-            --app-panel: #1f2333;
+            --app-bg: #030712;
+            --app-surface: rgba(17, 24, 39, 0.68);
+            --app-surface-2: rgba(15, 23, 42, 0.48);
+            --app-panel: rgba(31, 35, 51, 0.52);
             --app-text: #f8fafc;
             --app-muted: #a7b0c0;
-            --app-border: rgba(255, 255, 255, 0.1);
+            --app-border: rgba(255, 255, 255, 0.12);
             --app-accent: #22d3ee;
-            --app-accent-soft: rgba(34, 211, 238, 0.12);
-            --app-shadow: 0 28px 90px rgba(0, 0, 0, 0.35);
+            --app-accent-soft: rgba(34, 211, 238, 0.14);
+            --app-shadow: 0 28px 90px rgba(0, 0, 0, 0.38);
           }
         }
 
@@ -387,6 +781,56 @@ export default function BarcodeQrGeneratorApp() {
           accent-color: var(--app-accent);
         }
 
+        .glass-card {
+          background: linear-gradient(
+            135deg,
+            rgba(255, 255, 255, 0.58),
+            rgba(255, 255, 255, 0.28)
+          );
+          backdrop-filter: blur(24px) saturate(140%);
+          -webkit-backdrop-filter: blur(24px) saturate(140%);
+        }
+
+        @media (prefers-color-scheme: dark) {
+          .glass-card {
+            background: linear-gradient(
+              135deg,
+              rgba(17, 24, 39, 0.68),
+              rgba(15, 23, 42, 0.38)
+            );
+          }
+        }
+
+        .soft-texture {
+          background-image:
+            radial-gradient(circle at 20% 15%, rgba(34, 211, 238, 0.22), transparent 28%),
+            radial-gradient(circle at 85% 18%, rgba(59, 130, 246, 0.18), transparent 30%),
+            radial-gradient(circle at 50% 90%, rgba(14, 165, 233, 0.14), transparent 35%),
+            linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, transparent 100%);
+        }
+
+        .soft-texture::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          opacity: 0.22;
+          background-image:
+            linear-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(15, 23, 42, 0.06) 1px, transparent 1px);
+          background-size: 34px 34px;
+          mask-image: linear-gradient(to bottom, black, transparent 85%);
+        }
+
+        @media (prefers-color-scheme: dark) {
+          .soft-texture::before {
+            opacity: 0.18;
+            background-image:
+              linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+          }
+        }
+
         .bulk-grid {
           grid-template-columns: 1fr;
         }
@@ -398,15 +842,18 @@ export default function BarcodeQrGeneratorApp() {
         }
       `}</style>
 
-      <section className="mx-auto flex min-h-screen w-full max-w-[1900px] flex-col px-4 py-5 sm:px-5 lg:px-8 xl:min-h-[115vh] xl:px-10">
+      <section className="relative mx-auto flex min-h-screen w-full max-w-[1800px] flex-col overflow-hidden px-4 py-4 sm:px-5 lg:px-7 xl:min-h-[108vh] xl:px-8">
+        <div className="pointer-events-none absolute left-[-120px] top-[-120px] h-[340px] w-[340px] rounded-full bg-cyan-400/20 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-[-140px] right-[-120px] h-[420px] w-[420px] rounded-full bg-blue-500/10 blur-3xl" />
+
         <motion.header
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="mb-4 flex shrink-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"
+          className="glass-card relative z-10 mb-4 rounded-[1.5rem] border border-[var(--app-border)] p-4 shadow-[var(--app-shadow)] lg:p-5"
         >
-          <div className="max-w-4xl space-y-3">
-            <div className="inline-flex items-center gap-3 rounded-full border border-[var(--app-border)] bg-[var(--app-accent-soft)] px-4 py-2 text-sm font-bold text-[var(--app-text)]">
+          <nav className="mb-4 flex items-center justify-between gap-4">
+            <div className="inline-flex items-center gap-2.5 rounded-full border border-[var(--app-border)] bg-[var(--app-accent-soft)] px-3.5 py-2 text-sm font-black text-[var(--app-text)]">
               <svg
                 width="26"
                 height="26"
@@ -421,40 +868,65 @@ export default function BarcodeQrGeneratorApp() {
                 <rect x="18" y="6" width="2" height="20" rx="1" fill="currentColor" />
                 <rect x="23" y="6" width="6" height="20" rx="1" fill="var(--app-accent)" />
               </svg>
-              <span>Bar/Data</span>
+              <span>BarData</span>
             </div>
 
-            <h1 className="text-balance text-[2.6rem] font-black leading-[0.95] tracking-[-0.045em] sm:text-5xl md:text-6xl xl:text-6xl">
-              Generate scannable QR codes and barcodes.
-            </h1>
+            <div className="hidden items-center gap-2 rounded-full border border-[var(--app-border)] bg-[var(--app-surface-2)] px-4 py-2 text-xs font-bold text-[var(--app-muted)] sm:flex">
+              <span className="h-2 w-2 rounded-full bg-[var(--app-accent)]" />
+              Client-side generator
+            </div>
+          </nav>
 
-            <p className="max-w-3xl text-base leading-7 text-[var(--app-muted)] md:text-lg">
-              Build single codes or bulk barcode sheets for labels, SKUs, products,
-              Wi-Fi, links, emails, and inventory workflows.
-            </p>
-          </div>
+          <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr] lg:items-end">
+            <div className="space-y-3">
+              <div className="inline-flex rounded-full border border-[var(--app-border)] bg-[var(--app-surface-2)] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--app-muted)]">
+                QR · Barcode · Bulk sheets
+              </div>
 
-          <div className="hidden rounded-3xl border border-[var(--app-border)] bg-[var(--app-surface)] px-5 py-4 shadow-[var(--app-shadow)] lg:block lg:min-w-[320px]">
-            <p className="text-sm font-bold text-[var(--app-text)]">
-              System appearance enabled
-            </p>
-            <p className="mt-1 text-sm text-[var(--app-muted)]">
-              The interface follows your Mac/browser light or dark mode automatically.
-            </p>
+              <h1 className="max-w-3xl text-balance text-2xl font-black leading-tight tracking-[-0.03em] text-[var(--app-text)] md:text-3xl">
+                Generate codes that are ready to scan, print, and share.
+              </h1>
+
+              <p className="max-w-2xl text-sm leading-6 text-[var(--app-muted)] md:text-base">
+                A polished QR and barcode tool for labels, SKUs, product sheets,
+                inventory workflows, Wi-Fi, links, emails, and quick exports.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-2 backdrop-blur-xl">
+              <div className="rounded-xl bg-[var(--app-surface)] p-2.5 text-center">
+                <div className="text-base font-black text-[var(--app-text)]">PNG</div>
+                <div className="text-[10px] font-semibold text-[var(--app-muted)]">
+                  Export
+                </div>
+              </div>
+              <div className="rounded-xl bg-[var(--app-surface)] p-2.5 text-center">
+                <div className="text-base font-black text-[var(--app-text)]">SVG</div>
+                <div className="text-[10px] font-semibold text-[var(--app-muted)]">
+                  Vector
+                </div>
+              </div>
+              <div className="rounded-xl bg-[var(--app-surface)] p-2.5 text-center">
+                <div className="text-base font-black text-[var(--app-text)]">PDF</div>
+                <div className="text-[10px] font-semibold text-[var(--app-muted)]">
+                  Bulk
+                </div>
+              </div>
+            </div>
           </div>
         </motion.header>
 
-        <div className="grid flex-1 gap-5 xl:grid-cols-[0.78fr_1.22fr]">
+        <div className="relative z-10 grid flex-1 gap-4 xl:grid-cols-[0.72fr_1.28fr]">
           <motion.div
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
             className="min-h-0 min-w-0"
           >
-            <Card className="h-auto overflow-hidden border border-[var(--app-border)] bg-[var(--app-panel)] shadow-[var(--app-shadow)] xl:h-full">
+            <Card className="glass-card h-auto overflow-hidden rounded-[2rem] border border-[var(--app-border)] shadow-[var(--app-shadow)] xl:h-full">
               <CardContent className="h-auto p-4 md:p-5 xl:p-6">
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-2 rounded-2xl bg-[var(--app-surface-2)] p-1.5 sm:p-2">
+                  <div className="grid grid-cols-3 gap-2 rounded-[1.5rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-1.5 backdrop-blur-xl sm:p-2">
                     <button
                       onClick={() => setMode("qr")}
                       className={`flex items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs font-bold transition sm:px-3 sm:text-sm ${
@@ -566,7 +1038,9 @@ export default function BarcodeQrGeneratorApp() {
                         value={bulkValues}
                         onChange={(e) => setBulkValues(e.target.value)}
                         rows={6}
-                        placeholder={"Paste one barcode value per line.\nSKU-1001\nSKU-1002\nSKU-1003"}
+                        placeholder={
+                          "Paste one barcode value per line.\nSKU-1001\nSKU-1002\nSKU-1003"
+                        }
                         className="w-full resize-none rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-[var(--app-text)] outline-none placeholder:text-[var(--app-muted)] focus:border-[var(--app-accent)]"
                       />
                       <p className="text-xs leading-5 text-[var(--app-muted)]">
@@ -749,7 +1223,7 @@ export default function BarcodeQrGeneratorApp() {
             transition={{ duration: 0.35, delay: 0.05 }}
             className="min-h-0 min-w-0"
           >
-            <Card className="h-auto overflow-hidden border border-[var(--app-border)] bg-[var(--app-panel)] shadow-[var(--app-shadow)] xl:h-full">
+            <Card className="glass-card h-auto overflow-hidden rounded-[2rem] border border-[var(--app-border)] shadow-[var(--app-shadow)] xl:h-full">
               <CardContent className="flex h-auto flex-col gap-4 p-4 md:p-5 xl:p-6">
                 <div className="flex shrink-0 flex-col gap-3 md:flex-row md:items-end md:justify-between">
                   <div>
@@ -770,7 +1244,7 @@ export default function BarcodeQrGeneratorApp() {
                   </div>
                 </div>
 
-                <div className="min-h-[560px] flex-1 overflow-x-hidden rounded-[2rem] bg-[var(--app-surface-2)] p-3 md:min-h-[680px] md:p-5 xl:min-h-[760px] xl:p-7">
+                <div className="min-h-[560px] flex-1 overflow-x-hidden rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-3 shadow-inner backdrop-blur-xl md:min-h-[680px] md:p-5 xl:min-h-[760px] xl:p-7">
                   {mode !== "bulk" ? (
                     <div
                       ref={previewRef}
@@ -831,25 +1305,6 @@ export default function BarcodeQrGeneratorApp() {
                       )}
                     </div>
                   )}
-                </div>
-
-                <div className="grid shrink-0 gap-3 text-sm text-[var(--app-muted)] md:grid-cols-3">
-                  <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
-                    <div className="font-black text-[var(--app-text)]">Client-side</div>
-                    <div>No server cost for V1.</div>
-                  </div>
-
-                  <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
-                    <div className="font-black text-[var(--app-text)]">
-                      Scannable preview
-                    </div>
-                    <div>1 column on mobile, 2 by default on desktop.</div>
-                  </div>
-
-                  <div className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-4">
-                    <div className="font-black text-[var(--app-text)]">PDF export</div>
-                    <div>Bulk sheet downloads as one PDF.</div>
-                  </div>
                 </div>
               </CardContent>
             </Card>
