@@ -347,22 +347,38 @@ function createBulkExportCanvas({
 }
 
 function QRCodePreview({ value, size, margin, foreground }) {
-  const canvasRef = useRef(null);
+  const [dataUrl, setDataUrl] = useState("");
+
   useEffect(() => {
-    if (!canvasRef.current || !value) return;
-    QRCode.toCanvas(canvasRef.current, value, {
-      width: Math.max(140, Number(size) * 0.7),
+    if (!value) return;
+    // Render at a generous resolution so the QR is always crisp.
+    // The <img> tag below handles display sizing and always stays square.
+    QRCode.toDataURL(value, {
+      width: Math.max(320, Number(size) * 1.2),
       margin: Number(margin),
       color: { dark: foreground, light: "#ffffff" },
       errorCorrectionLevel: "H",
-    }).catch(() => {});
+    })
+      .then(setDataUrl)
+      .catch(() => {});
   }, [value, size, margin, foreground]);
-  return <canvas ref={canvasRef} className="h-auto w-full max-w-full" />;
+
+  if (!dataUrl) return null;
+  // <img> with h-auto always preserves 1:1 aspect ratio — canvas doesn't.
+  return (
+    <img
+      src={dataUrl}
+      alt={value}
+      className="h-auto w-full max-w-full"
+      style={{ imageRendering: "pixelated" }}
+    />
+  );
 }
 
-async function createQRBulkExportCanvas({ bulkItems, foreground, size, margin, columns }) {
+async function createQRBulkExportCanvas({ bulkItems, foreground, size, margin, columns, showValue }) {
   const exportColumns = Math.max(1, Number(columns));
   const qrSize = Math.max(280, Number(size) * 1.4);
+  const labelHeight = showValue ? 36 : 0;
   const qrCanvases = await Promise.all(
     bulkItems.map((item) => createQrCanvas(item, { foreground, size: qrSize, margin, exportScale: 1 }))
   );
@@ -373,7 +389,8 @@ async function createQRBulkExportCanvas({ bulkItems, foreground, size, margin, c
   const footerHeight = 76;
   const rows = Math.max(1, Math.ceil(bulkItems.length / exportColumns));
   const width = padding * 2 + exportColumns * cellSize + (exportColumns - 1) * gap;
-  const height = headerHeight + padding + rows * cellSize + (rows - 1) * gap + footerHeight;
+  const cellHeight = cellSize + labelHeight;
+  const height = headerHeight + padding + rows * cellHeight + (rows - 1) * gap + footerHeight;
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -385,11 +402,18 @@ async function createQRBulkExportCanvas({ bulkItems, foreground, size, margin, c
     const col = index % exportColumns;
     const row = Math.floor(index / exportColumns);
     const x = padding + col * (cellSize + gap);
-    const y = headerHeight + padding + row * (cellSize + gap);
-    drawCard(ctx, x, y, cellSize, cellSize);
+    const y = headerHeight + padding + row * (cellHeight + gap);
+    drawCard(ctx, x, y, cellSize, cellHeight);
     const qx = x + (cellSize - qrCanvas.width) / 2;
-    const qy = y + (cellSize - qrCanvas.height) / 2;
+    const qy = y + (cellSize - qrCanvas.height) / 2 - labelHeight / 2;
     ctx.drawImage(qrCanvas, qx, qy);
+    if (showValue) {
+      ctx.fillStyle = "#64748b";
+      ctx.font = "600 18px Arial, sans-serif";
+      ctx.textAlign = "center";
+      const maxWidth = cellSize - 32;
+      ctx.fillText(bulkItems[index], x + cellSize / 2, y + cellSize - 4, maxWidth);
+    }
   });
   drawBrandFooter(ctx, width, height);
   return canvas;
@@ -445,6 +469,7 @@ export default function BarcodeQrGeneratorApp() {
   const [margin, setMargin] = useState(3);
   const [columns, setColumns] = useState(3);
   const [showBulkValue, setShowBulkValue] = useState(true);
+  const [showQrValue, setShowQrValue] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [error, setError] = useState("");
   const [bulkErrors, setBulkErrors] = useState([]);
@@ -575,6 +600,7 @@ export default function BarcodeQrGeneratorApp() {
     setMargin(3);
     setColumns(3);
     setShowBulkValue(true);
+    setShowQrValue(false);
     setError("");
     setBulkErrors([]);
   };
@@ -590,7 +616,7 @@ export default function BarcodeQrGeneratorApp() {
       const canvas =
         mode === "bulk"
           ? bulkType === "qr"
-            ? await createQRBulkExportCanvas({ bulkItems, foreground, size, margin, columns })
+            ? await createQRBulkExportCanvas({ bulkItems, foreground, size, margin, columns, showValue: showQrValue })
             : createBulkExportCanvas({ bulkItems, barcodeFormat, foreground, size, margin, columns, showBulkValue })
           : await createSingleExportCanvas({ mode, value, barcodeFormat, foreground, background, size, margin });
 
@@ -689,9 +715,11 @@ export default function BarcodeQrGeneratorApp() {
             })
           )
         );
+        const labelH = showQrValue ? 36 : 0;
         const cellSize = Math.max(280, Number(size) + 120);
+        const cellHeight = cellSize + labelH;
         const width = padding * 2 + exportColumns * cellSize + (exportColumns - 1) * gap;
-        const height = headerHeight + padding + rows * cellSize + (rows - 1) * gap + footerHeight;
+        const height = headerHeight + padding + rows * cellHeight + (rows - 1) * gap + footerHeight;
         const cells = qrSvgStrings
           .map((qrSvg, index) => {
             const viewBoxMatch = qrSvg.match(/viewBox="([^"]+)"/);
@@ -700,13 +728,17 @@ export default function BarcodeQrGeneratorApp() {
             const col = index % exportColumns;
             const row = Math.floor(index / exportColumns);
             const x = padding + col * (cellSize + gap);
-            const y = headerHeight + padding + row * (cellSize + gap);
+            const y = headerHeight + padding + row * (cellHeight + gap);
             const innerSize = cellSize - 60;
+            const labelEl = showQrValue
+              ? `<text x="${x + cellSize / 2}" y="${y + cellSize + 24}" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="600" fill="#64748b">${escapeXml(bulkItems[index])}</text>`
+              : "";
             return `
-              <rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" rx="28" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+              <rect x="${x}" y="${y}" width="${cellSize}" height="${cellHeight}" rx="28" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
               <svg x="${x + 30}" y="${y + 30}" width="${innerSize}" height="${innerSize}" viewBox="${qrViewBox}" xmlns="http://www.w3.org/2000/svg">
                 ${qrInner}
-              </svg>`;
+              </svg>
+              ${labelEl}`;
           })
           .join("\n");
         const svg = `<?xml version="1.0" encoding="UTF-8"?>
@@ -771,7 +803,7 @@ export default function BarcodeQrGeneratorApp() {
 
     try {
       const canvas = bulkType === "qr"
-        ? await createQRBulkExportCanvas({ bulkItems, foreground, size, margin, columns })
+        ? await createQRBulkExportCanvas({ bulkItems, foreground, size, margin, columns, showValue: showQrValue })
         : createBulkExportCanvas({ bulkItems, barcodeFormat, foreground, size, margin, columns, showBulkValue });
 
       const pdf = new jsPDF("p", "mm", "a4");
@@ -834,118 +866,150 @@ export default function BarcodeQrGeneratorApp() {
   return (
     <main className="soft-texture relative min-h-screen overflow-clip bg-[var(--app-bg)] font-sans text-[var(--app-text)] transition-colors duration-300">
       <style jsx global>{`
+        /* ── Design tokens ─────────────────────────────────────────────── */
         :root {
-          --app-bg: #eef7ff;
-          --app-surface: rgba(255, 255, 255, 0.62);
-          --app-surface-2: rgba(255, 255, 255, 0.38);
-          --app-panel: rgba(255, 255, 255, 0.48);
+          --app-bg: #cddcf5;
+          --app-surface: rgba(255, 255, 255, 0.58);
+          --app-surface-2: rgba(255, 255, 255, 0.32);
+          --app-panel: rgba(255, 255, 255, 0.46);
           --app-text: #0f172a;
-          --app-muted: #64748b;
-          --app-border: rgba(15, 23, 42, 0.14);
+          --app-muted: #526080;
+          --app-border: rgba(255, 255, 255, 0.55);
           --app-accent: #06b6d4;
-          --app-accent-soft: rgba(6, 182, 212, 0.14);
-          --app-shadow: 0 24px 90px rgba(15, 23, 42, 0.14);
+          --app-accent-soft: rgba(6, 182, 212, 0.16);
         }
 
         @media (prefers-color-scheme: dark) {
           :root {
-            --app-bg: #030712;
-            --app-surface: rgba(17, 24, 39, 0.68);
-            --app-surface-2: rgba(15, 23, 42, 0.48);
-            --app-panel: rgba(31, 35, 51, 0.52);
-            --app-text: #f8fafc;
-            --app-muted: #a7b0c0;
-            --app-border: rgba(255, 255, 255, 0.12);
+            --app-bg: #060a18;
+            --app-surface: rgba(255, 255, 255, 0.08);
+            --app-surface-2: rgba(255, 255, 255, 0.04);
+            --app-panel: rgba(255, 255, 255, 0.06);
+            --app-text: #e2eaff;
+            --app-muted: #8898c0;
+            --app-border: rgba(255, 255, 255, 0.14);
             --app-accent: #22d3ee;
-            --app-accent-soft: rgba(34, 211, 238, 0.14);
-            --app-shadow: 0 28px 90px rgba(0, 0, 0, 0.38);
+            --app-accent-soft: rgba(34, 211, 238, 0.15);
           }
         }
 
+        /* ── Base typography ───────────────────────────────────────────── */
         html {
           background: var(--app-bg);
-          font-family:
-            Inter,
-            ui-sans-serif,
-            system-ui,
-            -apple-system,
-            BlinkMacSystemFont,
-            "Segoe UI",
-            sans-serif;
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+            BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
 
-        body,
-        button,
-        input,
-        textarea,
-        select {
-          font-family:
-            Inter,
-            ui-sans-serif,
-            system-ui,
-            -apple-system,
-            BlinkMacSystemFont,
-            "Segoe UI",
-            sans-serif;
+        body, button, input, textarea, select {
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+            BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
 
-        input[type="range"] {
-          accent-color: var(--app-accent);
-        }
+        input[type="range"] { accent-color: var(--app-accent); }
 
+        /* ── Liquid-glass card ─────────────────────────────────────────── */
+        /*  Top-left highlight + subtle refraction tint + strong blur      */
         .glass-card {
           background: linear-gradient(
-            135deg,
-            rgba(255, 255, 255, 0.58),
-            rgba(255, 255, 255, 0.28)
+            145deg,
+            rgba(255, 255, 255, 0.26) 0%,
+            rgba(255, 255, 255, 0.10) 100%
           );
-          backdrop-filter: blur(24px) saturate(140%);
-          -webkit-backdrop-filter: blur(24px) saturate(140%);
+          backdrop-filter: blur(44px) saturate(170%) brightness(1.06);
+          -webkit-backdrop-filter: blur(44px) saturate(170%) brightness(1.06);
+          border: 1px solid rgba(255, 255, 255, 0.48);
+          box-shadow:
+            inset 0 1.5px 0 rgba(255, 255, 255, 0.72),   /* top specular */
+            inset 1px 0   0 rgba(255, 255, 255, 0.22),   /* left edge   */
+            inset 0 -1px  0 rgba(0,   0,   0,   0.06),   /* bottom rim  */
+            0  4px 16px rgba(15, 23, 42, 0.08),
+            0 16px 48px rgba(15, 23, 42, 0.10);
         }
 
         @media (prefers-color-scheme: dark) {
           .glass-card {
             background: linear-gradient(
-              135deg,
-              rgba(17, 24, 39, 0.68),
-              rgba(15, 23, 42, 0.38)
+              145deg,
+              rgba(255, 255, 255, 0.11) 0%,
+              rgba(255, 255, 255, 0.03) 100%
             );
+            border: 1px solid rgba(255, 255, 255, 0.13);
+            box-shadow:
+              inset 0 1.5px 0 rgba(255, 255, 255, 0.22),
+              inset 1px 0   0 rgba(255, 255, 255, 0.07),
+              inset 0 -1px  0 rgba(0,   0,   0,   0.25),
+              0  4px 16px rgba(0, 0, 0, 0.35),
+              0 20px 60px rgba(0, 0, 0, 0.45);
           }
         }
 
-        .soft-texture {
-          background-image:
-            radial-gradient(circle at 20% 15%, rgba(34, 211, 238, 0.22), transparent 28%),
-            radial-gradient(circle at 85% 18%, rgba(59, 130, 246, 0.18), transparent 30%),
-            radial-gradient(circle at 50% 90%, rgba(14, 165, 233, 0.14), transparent 35%),
-            linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, transparent 100%);
-        }
-
-        .soft-texture::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          opacity: 0.22;
-          background-image:
-            linear-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(15, 23, 42, 0.06) 1px, transparent 1px);
-          background-size: 34px 34px;
-          mask-image: linear-gradient(to bottom, black, transparent 85%);
+        /* ── Inner preview glass panel ─────────────────────────────────── */
+        .glass-inner {
+          background: rgba(255, 255, 255, 0.14);
+          backdrop-filter: blur(36px) saturate(160%);
+          -webkit-backdrop-filter: blur(36px) saturate(160%);
+          border: 1px solid rgba(255, 255, 255, 0.40);
+          box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.60),
+            inset 0 0 40px rgba(255, 255, 255, 0.05),
+            0 2px 12px rgba(15, 23, 42, 0.06);
         }
 
         @media (prefers-color-scheme: dark) {
-          .soft-texture::before {
-            opacity: 0.18;
-            background-image:
-              linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+          .glass-inner {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            box-shadow:
+              inset 0 1px 0 rgba(255, 255, 255, 0.14),
+              inset 0 0 40px rgba(0, 0, 0, 0.12),
+              0 2px 12px rgba(0, 0, 0, 0.30);
           }
         }
 
-        .bulk-grid {
-          grid-template-columns: 1fr;
+        /* ── Gradient-mesh background ──────────────────────────────────── */
+        /*  Six large elliptical colour blobs — the glass tiles blur these  */
+        .soft-texture {
+          background-color: var(--app-bg);
+          background-image:
+            radial-gradient(ellipse 72% 60% at  8% 18%, rgba(99,  102, 241, 0.22), transparent),
+            radial-gradient(ellipse 62% 55% at 88%  8%, rgba(6,   182, 212, 0.28), transparent),
+            radial-gradient(ellipse 68% 58% at 72% 84%, rgba(59,  130, 246, 0.22), transparent),
+            radial-gradient(ellipse 58% 50% at  3% 82%, rgba(168,  85, 247, 0.18), transparent),
+            radial-gradient(ellipse 52% 46% at 94% 78%, rgba(14,  165, 233, 0.16), transparent),
+            radial-gradient(ellipse 44% 40% at 46% 46%, rgba(34,  211, 238, 0.09), transparent);
         }
+
+        @media (prefers-color-scheme: dark) {
+          .soft-texture {
+            background-image:
+              radial-gradient(ellipse 72% 60% at  8% 18%, rgba(99,  102, 241, 0.45), transparent),
+              radial-gradient(ellipse 62% 55% at 88%  8%, rgba(6,   182, 212, 0.42), transparent),
+              radial-gradient(ellipse 68% 58% at 72% 84%, rgba(59,  130, 246, 0.36), transparent),
+              radial-gradient(ellipse 58% 50% at  3% 82%, rgba(168,  85, 247, 0.32), transparent),
+              radial-gradient(ellipse 52% 46% at 94% 78%, rgba(14,  165, 233, 0.28), transparent),
+              radial-gradient(ellipse 44% 40% at 46% 46%, rgba(34,  211, 238, 0.14), transparent);
+          }
+        }
+
+        /* ── Film-grain / noise overlay ────────────────────────────────── */
+        /*  Tiny SVG feTurbulence tiled across the whole viewport           */
+        .soft-texture::before {
+          content: "";
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          z-index: 0;
+          opacity: 0.038;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)'/%3E%3C/svg%3E");
+          background-size: 128px 128px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+          .soft-texture::before { opacity: 0.055; }
+        }
+
+        /* ── Bulk grid ─────────────────────────────────────────────────── */
+        .bulk-grid { grid-template-columns: 1fr; }
 
         @media (min-width: 768px) {
           .bulk-grid {
@@ -955,14 +1019,11 @@ export default function BarcodeQrGeneratorApp() {
       `}</style>
 
       <section className="relative mx-auto flex min-h-screen w-full max-w-[1800px] flex-col overflow-clip px-4 py-4 sm:px-5 lg:px-7 xl:min-h-0 xl:px-8">
-        <div className="pointer-events-none absolute left-[-120px] top-[-120px] h-[340px] w-[340px] rounded-full bg-cyan-400/20 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-[-140px] right-[-120px] h-[420px] w-[420px] rounded-full bg-blue-500/10 blur-3xl" />
-
         <motion.header
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="glass-card relative z-10 mb-4 rounded-[1.5rem] border border-[var(--app-border)] p-4 shadow-[var(--app-shadow)] lg:p-5"
+          className="glass-card relative z-10 mb-4 rounded-[1.5rem] p-4 lg:p-5"
         >
           <nav className="mb-4 flex items-center justify-between gap-4">
             <div className="inline-flex items-center gap-2.5 rounded-full border border-[var(--app-border)] bg-[var(--app-accent-soft)] px-3.5 py-2 text-sm font-black text-[var(--app-text)]">
@@ -1035,7 +1096,7 @@ export default function BarcodeQrGeneratorApp() {
             transition={{ duration: 0.35 }}
             className="min-h-0 min-w-0 xl:sticky xl:top-4 xl:self-start"
           >
-            <Card className="glass-card h-auto overflow-hidden rounded-[2rem] border border-[var(--app-border)] shadow-[var(--app-shadow)]">
+            <Card className="glass-card h-auto overflow-hidden rounded-[2rem]">
               <CardContent className="h-auto p-4 md:p-5 xl:p-6">
                 <div className="space-y-4">
                   <div className="grid grid-cols-3 gap-2 rounded-[1.5rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-1.5 backdrop-blur-xl sm:p-2">
@@ -1285,6 +1346,17 @@ export default function BarcodeQrGeneratorApp() {
                           Show value below barcode
                         </label>
                       )}
+                      {bulkType === "qr" && (
+                        <label className="flex items-center gap-3 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm font-medium text-[var(--app-text)]">
+                          <input
+                            type="checkbox"
+                            checked={showQrValue}
+                            onChange={(e) => setShowQrValue(e.target.checked)}
+                            className="accent-cyan-400"
+                          />
+                          Show value below QR code
+                        </label>
+                      )}
                     </div>
                   )}
 
@@ -1354,7 +1426,7 @@ export default function BarcodeQrGeneratorApp() {
             transition={{ duration: 0.35, delay: 0.05 }}
             className="min-h-0 min-w-0 xl:flex xl:flex-col xl:self-stretch"
           >
-            <Card className="glass-card h-auto overflow-hidden rounded-[2rem] border border-[var(--app-border)] shadow-[var(--app-shadow)] xl:flex xl:h-full xl:flex-col">
+            <Card className="glass-card h-auto overflow-hidden rounded-[2rem] xl:flex xl:h-full xl:flex-col">
               <CardContent className="flex h-auto flex-col gap-4 p-4 md:p-5 xl:flex-1 xl:p-6">
                 <div className="flex shrink-0 flex-col gap-3 md:flex-row md:items-end md:justify-between">
                   <div>
@@ -1377,7 +1449,7 @@ export default function BarcodeQrGeneratorApp() {
 
                 <div
                   ref={previewContainerRef}
-                  className="min-h-[560px] flex-1 overflow-x-hidden overflow-y-auto rounded-[2rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-3 shadow-inner backdrop-blur-xl md:min-h-[680px] md:p-5 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:p-7"
+                  className="glass-inner min-h-[560px] flex-1 overflow-x-hidden overflow-y-auto rounded-[2rem] p-3 md:min-h-[680px] md:p-5 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:p-7"
                 >
                   {mode !== "bulk" ? (
                     <div
@@ -1418,14 +1490,22 @@ export default function BarcodeQrGeneratorApp() {
                             bulkType === "qr" ? (
                               <div
                                 key={`${item}-${index}`}
-                                className="flex aspect-square flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-3"
+                                className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-3"
                               >
-                                <QRCodePreview
-                                  value={item}
-                                  size={size}
-                                  margin={margin}
-                                  foreground={foreground}
-                                />
+                                {/* wrapper keeps the QR square regardless of container width */}
+                                <div className="aspect-square w-full">
+                                  <QRCodePreview
+                                    value={item}
+                                    size={size}
+                                    margin={margin}
+                                    foreground={foreground}
+                                  />
+                                </div>
+                                {showQrValue && (
+                                  <p className="w-full truncate text-center text-[11px] font-semibold text-slate-500">
+                                    {item}
+                                  </p>
+                                )}
                               </div>
                             ) : (
                               <div
@@ -1461,7 +1541,7 @@ export default function BarcodeQrGeneratorApp() {
         </div>
       </section>
 
-      <footer className="relative z-10 w-full border-t border-[var(--app-border)] bg-[var(--app-surface)]/60 backdrop-blur-xl">
+      <footer className="relative z-10 w-full border-t border-white/30 bg-white/10 backdrop-blur-3xl dark:border-white/10 dark:bg-white/[0.04]">
         <div className="mx-auto flex max-w-[1800px] flex-col items-center justify-between gap-3 px-6 py-4 sm:flex-row sm:gap-2">
           <p className="text-xs text-[var(--app-muted)]">
             © {new Date().getFullYear()} BarData. All rights reserved.
@@ -1473,7 +1553,7 @@ export default function BarcodeQrGeneratorApp() {
             className="inline-flex items-center gap-2 rounded-full border border-[var(--app-border)] bg-[var(--app-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--app-muted)] transition hover:border-[var(--app-accent)] hover:text-[var(--app-text)]"
           >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 585.61 501.84" className="h-4 w-4 shrink-0" aria-hidden="true">
-                <path fill="white" d="M585.13,0v501.84s-83.04,0-83.04,0l-.18-250.85-83.5.03v-83.75s83.5.04,83.5.04l-.02-83.62h-250.79s-.03,83.61-.03,83.61h-83.66s-.01-83.61-.01-83.61H.5c-.78-1.29-.03-2.26-.02-3.56L.49,0h584.64Z"/>
+                <path fill="currentColor" d="M585.13,0v501.84s-83.04,0-83.04,0l-.18-250.85-83.5.03v-83.75s83.5.04,83.5.04l-.02-83.62h-250.79s-.03,83.61-.03,83.61h-83.66s-.01-83.61-.01-83.61H.5c-.78-1.29-.03-2.26-.02-3.56L.49,0h584.64Z"/>
                 <polygon fill="#ffc200" points="84.01 501.84 0 501.84 .11 418.28 83.83 418.28 84.01 501.84"/>
                 <polygon fill="#ffc200" points="251.08 167.29 418.41 167.26 418.41 251.01 251.22 251.01 251.18 418.25 418.29 418.28 418.57 501.84 167.53 501.84 167.42 167.29 251.08 167.29"/>
                 <rect fill="#ffc200" x="585.13" y="0" width=".48" height="501.84"/>
