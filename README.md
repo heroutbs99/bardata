@@ -4,7 +4,7 @@ BarData is a client-side QR code and barcode generator built with Next.js. It su
 
 ## Live Demo
 
-[bardata.tcfella.com](https://bardata.tcfella.com)
+[bardata.vercel.app](https://bardata.vercel.app)
 
 ## Features
 
