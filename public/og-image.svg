@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0b0b"/>
+      <stop offset="1" stop-color="#1a1608"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(1000 82) rotate(132) scale(580 460)">
+      <stop stop-color="#ffd60a" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#ffd60a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" rx="36" fill="url(#background)"/>
+  <rect width="1200" height="630" rx="36" fill="url(#glow)"/>
+  <rect x="48" y="48" width="1104" height="534" rx="28" fill="#141414" stroke="#f5f5f3" stroke-opacity="0.12" stroke-width="2"/>
+
+  <g transform="translate(88 86)">
+    <rect width="14" height="76" rx="3" fill="#f5f5f3"/>
+    <rect x="24" width="8" height="76" rx="3" fill="#f5f5f3"/>
+    <rect x="43" width="20" height="76" rx="3" fill="#f5f5f3"/>
+    <rect x="74" width="10" height="76" rx="3" fill="#f5f5f3"/>
+    <rect x="96" width="22" height="76" rx="3" fill="#ffd60a"/>
+  </g>
+
+  <text x="236" y="147" fill="#f5f5f3" font-family="Arial, Helvetica, sans-serif" font-size="68" font-weight="800" letter-spacing="-3">BarData</text>
+  <text x="88" y="264" fill="#f5f5f3" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="800" letter-spacing="-2">QR codes and barcodes,</text>
+  <text x="88" y="328" fill="#ffd60a" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="800" letter-spacing="-2">ready to export.</text>
+  <text x="88" y="400" fill="#aaa9a3" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="500">Single codes and bulk sheets. PNG, SVG, and PDF.</text>
+
+  <g transform="translate(88 470)">
+    <rect width="212" height="58" rx="29" fill="#ffd60a"/>
+    <text x="106" y="38" text-anchor="middle" fill="#0b0b0b" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="800">Free · Client-side</text>
+    <text x="242" y="37" fill="#aaa9a3" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="600">bardata.tcfella.com</text>
+  </g>
+
+  <g transform="translate(855 160)" fill="#f5f5f3">
+    <rect width="220" height="220" rx="18" fill="#ffffff"/>
+    <g fill="#0b0b0b">
+      <path d="M20 20h62v62H20zm12 12v38h38V32zM138 20h62v62h-62zm12 12v38h38V32zM20 138h62v62H20zm12 12v38h38v-38z"/>
+      <path d="M98 20h20v20H98zM98 54h20v44H54V90h28V54h16zM132 98h20v20h-20zM166 98h34v20h-34zM98 132h20v20H98zM132 132h20v20h-20zM166 132h34v20h-34zM98 166h54v34H98v-20h34v-14zM166 166h20v20h-20zM186 186h14v14h-14z"/>
+    </g>
+  </g>
+  <g transform="translate(850 416)">
+    <rect width="10" height="86" rx="2" fill="#f5f5f3"/>
+    <rect x="18" width="5" height="86" rx="2" fill="#f5f5f3"/>
+    <rect x="31" width="14" height="86" rx="2" fill="#f5f5f3"/>
+    <rect x="54" width="7" height="86" rx="2" fill="#f5f5f3"/>
+    <rect x="70" width="19" height="86" rx="2" fill="#ffd60a"/>
+    <rect x="98" width="8" height="86" rx="2" fill="#f5f5f3"/>
+    <rect x="115" width="15" height="86" rx="2" fill="#f5f5f3"/>
+    <rect x="138" width="5" height="86" rx="2" fill="#f5f5f3"/>
+    <rect x="152" width="22" height="86" rx="2" fill="#f5f5f3"/>
+    <rect x="183" width="9" height="86" rx="2" fill="#f5f5f3"/>
+    <rect x="201" width="14" height="86" rx="2" fill="#ffd60a"/>
+  </g>
+</svg>

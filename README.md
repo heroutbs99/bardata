@@ -1,22 +1,18 @@
-# Bar/Data
+# BarData
 
-Bar/Data is a clean QR code and barcode generator built with Next.js. It supports single QR codes, single barcodes, and bulk barcode sheet generation with export options for PNG, SVG, PDF, and CSV.
+BarData is a client-side QR code and barcode generator built with Next.js. It supports single codes and bulk QR or barcode sheets with PNG, SVG, and PDF exports.
 
 ## Live Demo
 
-https://bardata.vercel.app
-
-Replace the link above with your real Vercel link.
+[bardata.tcfella.com](https://bardata.tcfella.com)
 
 ## Features
 
 - Generate QR codes for URLs, text, email, phone numbers, and Wi-Fi
 - Generate single barcodes
-- Generate bulk barcode sheets from line-by-line values
-- Export as PNG
-- Export as SVG
-- Export bulk barcode sheets as PDF
-- Export bulk values as CSV
+- Generate bulk QR and barcode sheets from line-by-line values
+- Export single codes and bulk sheets as PNG or SVG
+- Export bulk sheets as PDF
 - System light/dark mode support
 - Responsive layout for desktop and mobile
 - Client-side generation with no backend required
@@ -43,14 +39,38 @@ Replace the link above with your real Vercel link.
 - Lucide React
 - QRCode
 - JsBarcode
-- html-to-image
 - jsPDF
 - Vercel
 
-## Installation
+## Local Development
+
+Requirements: Node.js 20 or newer and npm.
 
 Clone the repository:
 
 ```bash
 git clone https://github.com/heroutbs99/bardata.git
 cd bardata
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Production Build
+
+```bash
+npm run build
+npm start
+```
+
+## Available Scripts
+
+- `npm run dev` starts the local development server.
+- `npm run build` creates an optimized production build.
+- `npm start` serves the production build.
+- `npm run lint` checks the project with ESLint.
+
+## Privacy
+
+Code generation and export happen entirely in the browser. BarData does not require a backend or account.

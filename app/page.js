@@ -1,5 +1,8 @@
 "use client";
 
+/* QR previews intentionally use raw data-URL images to preserve crisp pixels. */
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -11,6 +14,7 @@ import {
   Check,
   Layers,
   FileText,
+  Palette,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,21 +41,77 @@ const qrPresets = [
   { label: "Wi-Fi", value: "WIFI:T:WPA;S:NetworkName;P:Password123;;" },
 ];
 
+const qrExampleValue = "https://tcfella.com";
+
+const bulkQrExamples = [
+  "https://tcfella.com/1",
+  "https://tcfella.com/2",
+  "https://tcfella.com/3",
+  "https://tcfella.com/4",
+  "https://tcfella.com/5",
+  "https://tcfella.com/6",
+];
+
+const barcodeExamples = {
+  CODE128: ["SKU-1001", "SKU-1002", "SKU-1003", "SKU-1004", "SKU-1005", "SKU-1006"],
+  EAN13: ["590123412345", "400638133393", "123456789012", "978020137962"],
+  UPC: ["03600029145", "04210000526", "01234567890", "72527273070"],
+  CODE39: ["ABC-123", "PART-204", "BIN-305", "BOX-406"],
+  ITF14: ["10012345678902", "10012345678919", "10012345678926", "10012345678933"],
+  MSI: ["1234567890", "2345678901", "3456789012", "4567890123"],
+};
+
+const defaultSizes = {
+  qr: 320,
+  barcode: 220,
+  bulk: 220,
+};
+
 function downloadDataUrl(dataUrl, fileName) {
   const link = document.createElement("a");
   link.download = fileName;
   link.href = dataUrl;
+  link.style.display = "none";
+  document.body.appendChild(link);
   link.click();
+  link.remove();
 }
 
-function downloadText(text, fileName, mime = "image/svg+xml") {
+function downloadText(text, fileName, mime = "text/plain;charset=utf-8") {
   const blob = new Blob([text], { type: mime });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.download = fileName;
   link.href = url;
+  link.style.display = "none";
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+
+  // Keep the Blob URL alive long enough for Safari and mobile browsers to
+  // finish reading it after the click handler returns.
+  window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function downloadSvgFile(svgText, fileName) {
+  const parsed = new DOMParser().parseFromString(svgText, "image/svg+xml");
+  const parserError = parsed.querySelector("parsererror");
+  const root = parsed.documentElement;
+
+  if (
+    parserError ||
+    root.localName !== "svg" ||
+    root.namespaceURI !== "http://www.w3.org/2000/svg"
+  ) {
+    throw new Error("Generated SVG is not a valid SVG document.");
+  }
+
+  const serialized = new XMLSerializer().serializeToString(root);
+  downloadText(
+    `<?xml version="1.0" encoding="UTF-8"?>\n${serialized}`,
+    fileName,
+    "image/svg+xml;charset=utf-8"
+  );
 }
 
 function safeFileName(value) {
@@ -284,8 +344,12 @@ function makeBarcodeSvg(value, options) {
     margin: Number(options.margin) * 10,
   });
 
-  const w = Number(tempSvg.getAttribute("width") || 420);
-  const h = Number(tempSvg.getAttribute("height") || 180);
+  // JsBarcode writes dimensions with CSS units (for example, "307px").
+  // Number("307px") is NaN, which breaks positioning in composed SVG sheets.
+  const parsedWidth = Number.parseFloat(tempSvg.getAttribute("width") || "");
+  const parsedHeight = Number.parseFloat(tempSvg.getAttribute("height") || "");
+  const w = Number.isFinite(parsedWidth) && parsedWidth > 0 ? parsedWidth : 420;
+  const h = Number.isFinite(parsedHeight) && parsedHeight > 0 ? parsedHeight : 180;
 
   // XMLSerializer gives properly-namespaced output; strip outer <svg> wrapper
   const full = new XMLSerializer().serializeToString(tempSvg);
@@ -474,24 +538,258 @@ function BarcodePreview({
   return <svg ref={svgRef} className="h-auto w-full max-w-full" />;
 }
 
+function normalizeHexColor(input) {
+  const value = input.trim();
+
+  if (/^#[0-9a-f]{6}$/i.test(value)) return value.toLowerCase();
+
+  if (/^#[0-9a-f]{3}$/i.test(value)) {
+    const [red, green, blue] = value.slice(1);
+    return `#${red}${red}${green}${green}${blue}${blue}`.toLowerCase();
+  }
+
+  return null;
+}
+
+function hexToHsv(input) {
+  const hex = normalizeHexColor(input) || "#000000";
+  const red = Number.parseInt(hex.slice(1, 3), 16) / 255;
+  const green = Number.parseInt(hex.slice(3, 5), 16) / 255;
+  const blue = Number.parseInt(hex.slice(5, 7), 16) / 255;
+  const maximum = Math.max(red, green, blue);
+  const minimum = Math.min(red, green, blue);
+  const delta = maximum - minimum;
+  let hue = 0;
+
+  if (delta !== 0) {
+    if (maximum === red) hue = 60 * (((green - blue) / delta) % 6);
+    else if (maximum === green) hue = 60 * ((blue - red) / delta + 2);
+    else hue = 60 * ((red - green) / delta + 4);
+  }
+
+  return {
+    h: hue < 0 ? hue + 360 : hue,
+    s: maximum === 0 ? 0 : delta / maximum,
+    v: maximum,
+  };
+}
+
+function hsvToHex(hue, saturation, value) {
+  const chroma = value * saturation;
+  const section = ((hue % 360) + 360) % 360 / 60;
+  const secondary = chroma * (1 - Math.abs((section % 2) - 1));
+  const offset = value - chroma;
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+
+  if (section < 1) [red, green] = [chroma, secondary];
+  else if (section < 2) [red, green] = [secondary, chroma];
+  else if (section < 3) [green, blue] = [chroma, secondary];
+  else if (section < 4) [green, blue] = [secondary, chroma];
+  else if (section < 5) [red, blue] = [secondary, chroma];
+  else [red, blue] = [chroma, secondary];
+
+  return `#${[red, green, blue]
+    .map((channel) =>
+      Math.round((channel + offset) * 255)
+        .toString(16)
+        .padStart(2, "0")
+    )
+    .join("")}`;
+}
+
+function ColorControl({ label, value, onChange }) {
+  const [draft, setDraft] = useState(value.toUpperCase());
+  const [isInvalid, setIsInvalid] = useState(false);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const [hue, setHue] = useState(() => hexToHsv(value).h);
+  const hsv = hexToHsv(value);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setDraft(value.toUpperCase());
+      setIsInvalid(false);
+      const nextHsv = hexToHsv(value);
+      if (nextHsv.s > 0) setHue(nextHsv.h);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [value]);
+
+  const applyColor = (nextColor) => {
+    const normalized = normalizeHexColor(nextColor);
+    if (!normalized) return false;
+
+    setDraft(normalized.toUpperCase());
+    setIsInvalid(false);
+    const nextHsv = hexToHsv(normalized);
+    if (nextHsv.s > 0) setHue(nextHsv.h);
+    onChange(normalized);
+    return true;
+  };
+
+  const handleHexChange = (event) => {
+    const nextDraft = event.currentTarget.value;
+    setDraft(nextDraft);
+    setIsInvalid(false);
+
+    // Keep the preview live as soon as the typed value is a complete color,
+    // without sending incomplete/invalid values to the code generators.
+    const normalized = normalizeHexColor(nextDraft);
+    if (normalized) applyColor(normalized);
+  };
+
+  const commitHexValue = () => {
+    if (!applyColor(draft)) {
+      setDraft(value.toUpperCase());
+      setIsInvalid(true);
+    }
+  };
+
+  const updateSaturationAndValue = (event) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const saturation = Math.min(
+      1,
+      Math.max(0, (event.clientX - bounds.left) / bounds.width)
+    );
+    const brightness = Math.min(
+      1,
+      Math.max(0, 1 - (event.clientY - bounds.top) / bounds.height)
+    );
+    applyColor(hsvToHex(hue, saturation, brightness));
+  };
+
+  const handlePalettePointerDown = (event) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateSaturationAndValue(event);
+  };
+
+  const handlePalettePointerMove = (event) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      updateSaturationAndValue(event);
+    }
+  };
+
+  const handleHueChange = (event) => {
+    const nextHue = Number(event.currentTarget.value);
+    setHue(nextHue);
+    applyColor(hsvToHex(nextHue, hsv.s, hsv.v));
+  };
+
+  return (
+    <div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setIsPaletteOpen((current) => !current)}
+          aria-label={`Open ${label.toLowerCase()} color palette`}
+          aria-expanded={isPaletteOpen}
+          className="relative h-11 w-14 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-[var(--app-border)] p-1 shadow-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]"
+          style={{ backgroundColor: value }}
+        >
+          <span className="absolute inset-0 bg-gradient-to-br from-white/20 to-black/10" />
+          <Palette className="absolute bottom-1 right-1 size-3.5 rounded bg-white/85 p-0.5 text-slate-800 shadow-sm" />
+        </button>
+        <div className="relative min-w-0 flex-1">
+          <input
+            type="text"
+            value={draft}
+            aria-label={`${label} hex color`}
+            aria-invalid={isInvalid}
+            maxLength={7}
+            spellCheck={false}
+            onChange={handleHexChange}
+            onBlur={commitHexValue}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                commitHexValue();
+                event.currentTarget.blur();
+              }
+            }}
+            className={`h-11 w-full rounded-2xl border bg-[var(--app-surface)] py-2.5 pl-4 pr-11 uppercase text-[var(--app-text)] outline-none focus:border-[var(--app-accent)] ${
+              isInvalid ? "border-red-500" : "border-[var(--app-border)]"
+            }`}
+          />
+          <button
+            type="button"
+            onClick={() => setIsPaletteOpen((current) => !current)}
+            aria-label={`Open ${label.toLowerCase()} color palette`}
+            aria-expanded={isPaletteOpen}
+            title="Open color palette"
+            className={`absolute right-1.5 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-xl transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] ${
+              isPaletteOpen
+                ? "bg-[var(--app-accent-soft)] text-[var(--app-text)]"
+                : "text-[var(--app-muted)] hover:bg-[var(--app-surface-2)] hover:text-[var(--app-text)]"
+            }`}
+          >
+            <Palette className="size-4" />
+          </button>
+        </div>
+      </div>
+
+      {isPaletteOpen && (
+        <div className="mt-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3 shadow-sm">
+          <div
+            role="group"
+            aria-label={`${label} saturation and brightness`}
+            className="relative h-28 w-full touch-none cursor-crosshair overflow-hidden rounded-xl"
+            style={{
+              background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent), hsl(${hue} 100% 50%)`,
+            }}
+            onPointerDown={handlePalettePointerDown}
+            onPointerMove={handlePalettePointerMove}
+          >
+            <span
+              className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(15,23,42,0.65),0_1px_4px_rgba(15,23,42,0.45)]"
+              style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }}
+            />
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">
+              Hue
+            </span>
+            <input
+              type="range"
+              min="0"
+              max="359"
+              value={Math.round(hue)}
+              aria-label={`${label} hue`}
+              onInput={handleHueChange}
+              onChange={handleHueChange}
+              className="h-3 min-w-0 flex-1 cursor-pointer appearance-none rounded-full"
+              style={{
+                background:
+                  "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BarcodeQrGeneratorApp() {
   const [mode, setMode] = useState("bulk");
   const [bulkType, setBulkType] = useState("barcode");
-  const [value, setValue] = useState("https://tcfella.com");
-  const [bulkBarcodeValues, setBulkBarcodeValues] = useState(
-    "SKU-1001\nSKU-1002\nSKU-1003\nSKU-1004\nSKU-1005\nSKU-1006"
-  );
-  const [bulkQrValues, setBulkQrValues] = useState(
-    "https://tcfella.com/1\nhttps://tcfella.com/2\nhttps://tcfella.com/3\nhttps://tcfella.com/4\nhttps://tcfella.com/5\nhttps://tcfella.com/6"
-  );
+  const [value, setValue] = useState("");
+  const [bulkBarcodeValues, setBulkBarcodeValues] = useState("");
+  const [bulkQrValues, setBulkQrValues] = useState("");
   const bulkValues = bulkType === "qr" ? bulkQrValues : bulkBarcodeValues;
   const setBulkValues = bulkType === "qr" ? setBulkQrValues : setBulkBarcodeValues;
   const [barcodeFormat, setBarcodeFormat] = useState("CODE128");
   const [foreground, setForeground] = useState("#111827");
   const [background, setBackground] = useState("transparent");
-  const [size, setSize] = useState(220);
+  const [sizes, setSizes] = useState(defaultSizes);
   const [margin, setMargin] = useState(3);
-  const [columns, setColumns] = useState(3);
+  const [columns, setColumns] = useState(2);
   const [showBulkValue, setShowBulkValue] = useState(true);
   const [showQrValue, setShowQrValue] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
@@ -504,31 +802,50 @@ export default function BarcodeQrGeneratorApp() {
   const bulkSheetRef = useRef(null);
   const previewContainerRef = useRef(null);
 
+  const size = sizes[mode];
+  const setSize = (nextSize) => {
+    setSizes((currentSizes) => ({
+      ...currentSizes,
+      [mode]: nextSize,
+    }));
+  };
+
   // When preview background is "transparent" the actual barcode/QR still
   // needs a real colour — libraries don't support transparent fills.
   const codeBg = background === "transparent" ? "#ffffff" : background;
 
-  const bulkItems = useMemo(() => getBulkItems(bulkValues), [bulkValues]);
-  const fileBase = useMemo(() => safeFileName(`${mode}-${value}`), [mode, value]);
+  const singleExampleValue =
+    mode === "qr" ? qrExampleValue : barcodeExamples[barcodeFormat][0];
+  const effectiveValue = value.trim() || singleExampleValue;
+  const enteredBulkItems = useMemo(() => getBulkItems(bulkValues), [bulkValues]);
+  const exampleBulkItems =
+    bulkType === "qr" ? bulkQrExamples : barcodeExamples[barcodeFormat];
+  const usingBulkExamples = enteredBulkItems.length === 0;
+  const bulkItems = usingBulkExamples ? exampleBulkItems : enteredBulkItems;
+  const bulkPlaceholder = exampleBulkItems.join("\n");
+  const fileBase = useMemo(
+    () => safeFileName(`${mode}-${effectiveValue}`),
+    [mode, effectiveValue]
+  );
 
   useEffect(() => {
-    setError("");
+    let cancelled = false;
+    const updateError = (message) => {
+      queueMicrotask(() => {
+        if (!cancelled) setError(message);
+      });
+    };
 
-    if (mode === "bulk") return;
+    updateError("");
 
-    if (!value.trim()) {
-      setError("Enter some data to generate a code.");
-      setQrDataUrl("");
-
-      if (barcodeRef.current) {
-        barcodeRef.current.innerHTML = "";
-      }
-
-      return;
+    if (mode === "bulk") {
+      return () => {
+        cancelled = true;
+      };
     }
 
     if (mode === "qr") {
-      QRCode.toDataURL(value, {
+      QRCode.toDataURL(effectiveValue, {
         width: Number(size),
         margin: Number(margin),
         color: {
@@ -537,15 +854,17 @@ export default function BarcodeQrGeneratorApp() {
         },
         errorCorrectionLevel: "H",
       })
-        .then(setQrDataUrl)
-        .catch(() => setError("Could not generate this QR code."));
+        .then((dataUrl) => {
+          if (!cancelled) setQrDataUrl(dataUrl);
+        })
+        .catch(() => updateError("Could not generate this QR code."));
     }
 
     if (mode === "barcode" && barcodeRef.current) {
       try {
         barcodeRef.current.innerHTML = "";
 
-        JsBarcode(barcodeRef.current, value, {
+        JsBarcode(barcodeRef.current, effectiveValue, {
           format: barcodeFormat,
           lineColor: foreground,
           background: codeBg,
@@ -556,7 +875,7 @@ export default function BarcodeQrGeneratorApp() {
           margin: Number(margin) * 10,
         });
       } catch (err) {
-        setError(
+        updateError(
           barcodeFormat === "EAN13"
             ? "EAN-13 needs exactly 12 or 13 digits. Example: 5901234123457"
             : barcodeFormat === "UPC"
@@ -565,12 +884,23 @@ export default function BarcodeQrGeneratorApp() {
         );
       }
     }
-  }, [mode, value, barcodeFormat, foreground, background, size, margin]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, effectiveValue, barcodeFormat, foreground, codeBg, size, margin]);
 
   useEffect(() => {
     if (mode !== "bulk") return;
-    setBulkErrors([]);
-  }, [mode, bulkValues, barcodeFormat]);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setBulkErrors([]);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, bulkValues, barcodeFormat, bulkType]);
 
   // Scroll behaviour: when mouse is OVER the preview, the preview scrolls;
   // when mouse is NOT over it, wheel events propagate naturally to the page.
@@ -619,15 +949,15 @@ export default function BarcodeQrGeneratorApp() {
   const reset = () => {
     setMode("bulk");
     setBulkType("barcode");
-    setValue("https://tcfella.com");
-    setBulkBarcodeValues("SKU-1001\nSKU-1002\nSKU-1003\nSKU-1004\nSKU-1005\nSKU-1006");
-    setBulkQrValues("https://tcfella.com/1\nhttps://tcfella.com/2\nhttps://tcfella.com/3\nhttps://tcfella.com/4\nhttps://tcfella.com/5\nhttps://tcfella.com/6");
+    setValue("");
+    setBulkBarcodeValues("");
+    setBulkQrValues("");
     setBarcodeFormat("CODE128");
     setForeground("#111827");
     setBackground("transparent");
-    setSize(220);
+    setSizes({ ...defaultSizes });
     setMargin(3);
-    setColumns(3);
+    setColumns(2);
     setShowBulkValue(true);
     setShowQrValue(false);
     setError("");
@@ -635,7 +965,9 @@ export default function BarcodeQrGeneratorApp() {
   };
 
   const copyValue = async () => {
-    await navigator.clipboard.writeText(mode === "bulk" ? bulkValues : value);
+    await navigator.clipboard.writeText(
+      mode === "bulk" ? bulkItems.join("\n") : effectiveValue
+    );
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
   };
@@ -647,7 +979,7 @@ export default function BarcodeQrGeneratorApp() {
           ? bulkType === "qr"
             ? await createQRBulkExportCanvas({ bulkItems, foreground, size, margin, columns, showValue: showQrValue })
             : createBulkExportCanvas({ bulkItems, barcodeFormat, foreground, size, margin, columns, showBulkValue })
-          : await createSingleExportCanvas({ mode, value, barcodeFormat, foreground, background: codeBg, size, margin });
+          : await createSingleExportCanvas({ mode, value: effectiveValue, barcodeFormat, foreground, background: codeBg, size, margin });
 
       downloadDataUrl(
         canvas.toDataURL("image/png"),
@@ -664,7 +996,7 @@ export default function BarcodeQrGeneratorApp() {
   const downloadSvg = async () => {
     try {
       if (mode === "qr") {
-        const qrSvg = await QRCode.toString(value, {
+        const qrSvg = await QRCode.toString(effectiveValue, {
           type: "svg",
           margin: Number(margin),
           color: {
@@ -701,12 +1033,12 @@ export default function BarcodeQrGeneratorApp() {
   ${makeSvgFooter(width, height)}
 </svg>`;
 
-        downloadText(svg, `${fileBase}-bardata.svg`);
+        downloadSvgFile(svg, `${fileBase}-bardata.svg`);
         return;
       }
 
       if (mode === "barcode") {
-        const barcode = makeBarcodeSvg(value, {
+        const barcode = makeBarcodeSvg(effectiveValue, {
           format: barcodeFormat,
           foreground,
           size,
@@ -734,7 +1066,7 @@ export default function BarcodeQrGeneratorApp() {
   ${makeSvgFooter(width, height)}
 </svg>`;
 
-        downloadText(svg, `${fileBase}-bardata.svg`);
+        downloadSvgFile(svg, `${fileBase}-bardata.svg`);
         return;
       }
 
@@ -789,7 +1121,7 @@ export default function BarcodeQrGeneratorApp() {
   ${cells}
   ${makeSvgFooter(width, height)}
 </svg>`;
-        downloadText(svg, "bardata-bulk-qr.svg");
+        downloadSvgFile(svg, "bardata-bulk-qr.svg");
         return;
       }
 
@@ -832,7 +1164,7 @@ export default function BarcodeQrGeneratorApp() {
   ${makeSvgFooter(width, height)}
 </svg>`;
 
-      downloadText(svg, "bardata-bulk-barcodes.svg");
+      downloadSvgFile(svg, "bardata-bulk-barcodes.svg");
     } catch (err) {
       console.error("SVG export failed:", err);
       setError("Could not export SVG. Check the barcode value and format.");
@@ -843,55 +1175,108 @@ export default function BarcodeQrGeneratorApp() {
     if (mode !== "bulk" || bulkErrors.length) return;
 
     try {
-      const canvas = bulkType === "qr"
-        ? await createQRBulkExportCanvas({ bulkItems, foreground, size, margin, columns, showValue: showQrValue })
-        : createBulkExportCanvas({ bulkItems, barcodeFormat, foreground, size, margin, columns, showBulkValue });
-
       const pdf = new jsPDF("p", "mm", "a4");
       const pageWidthMm = pdf.internal.pageSize.getWidth();
       const pageHeightMm = pdf.internal.pageSize.getHeight();
       const marginMm = 6;
       const usableWidthMm = pageWidthMm - marginMm * 2;
       const usableHeightMm = pageHeightMm - marginMm * 2;
-      const sliceHeightPx = Math.floor((usableHeightMm / usableWidthMm) * canvas.width);
+      const exportColumns = Math.max(1, Number(columns));
+      const gap = 28;
+      const padding = 48;
+      const headerHeight = 124;
+      const footerHeight = 76;
 
-      let positionY = 0;
-      let pageIndex = 0;
+      let exportCanvasWidth;
+      let exportCellHeight;
 
-      while (positionY < canvas.height) {
-        const currentSliceHeight = Math.min(sliceHeightPx, canvas.height - positionY);
-        const sliceCanvas = document.createElement("canvas");
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = currentSliceHeight;
-
-        const ctx = sliceCanvas.getContext("2d");
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-        ctx.drawImage(
-          canvas,
-          0,
-          positionY,
-          canvas.width,
-          currentSliceHeight,
-          0,
-          0,
-          canvas.width,
-          currentSliceHeight
-        );
-
-        const imgData = sliceCanvas.toDataURL("image/png");
-        const sliceHeightMm = (currentSliceHeight * usableWidthMm) / canvas.width;
-
-        if (pageIndex > 0) {
-          pdf.addPage();
-        }
-
-        pdf.addImage(imgData, "PNG", marginMm, marginMm, usableWidthMm, sliceHeightMm);
-        positionY += currentSliceHeight;
-        pageIndex += 1;
+      if (bulkType === "qr") {
+        const qrSize = Math.max(280, Number(size) * 1.4);
+        const cellSize = Math.max(360, qrSize + 120);
+        const labelHeight = showQrValue ? 36 : 0;
+        exportCellHeight = cellSize + labelHeight;
+        exportCanvasWidth =
+          padding * 2 +
+          exportColumns * cellSize +
+          (exportColumns - 1) * gap;
+      } else {
+        const previewBarcode = createBarcodeCanvas(bulkItems[0], {
+          format: barcodeFormat,
+          foreground,
+          size,
+          margin,
+          showValue: showBulkValue,
+          exportScale: 1.8,
+        });
+        const cellWidth = Math.max(620, previewBarcode.width + 130);
+        exportCellHeight = Math.max(280, previewBarcode.height + 130);
+        exportCanvasWidth =
+          padding * 2 +
+          exportColumns * cellWidth +
+          (exportColumns - 1) * gap;
       }
 
-      pdf.save("bardata-bulk-barcodes.pdf");
+      // Calculate how many complete rows fit on A4. Pages are then rendered
+      // independently so a page boundary can never cut through a code.
+      const maxCanvasHeight =
+        exportCanvasWidth * (usableHeightMm / usableWidthMm);
+      const fixedCanvasHeight = headerHeight + padding + footerHeight;
+      const rowsPerPage = Math.max(
+        1,
+        Math.floor(
+          (maxCanvasHeight - fixedCanvasHeight + gap) /
+            (exportCellHeight + gap)
+        )
+      );
+      const itemsPerPage = rowsPerPage * exportColumns;
+
+      for (let offset = 0; offset < bulkItems.length; offset += itemsPerPage) {
+        const pageItems = bulkItems.slice(offset, offset + itemsPerPage);
+        const pageCanvas =
+          bulkType === "qr"
+            ? await createQRBulkExportCanvas({
+                bulkItems: pageItems,
+                foreground,
+                size,
+                margin,
+                columns,
+                showValue: showQrValue,
+              })
+            : createBulkExportCanvas({
+                bulkItems: pageItems,
+                barcodeFormat,
+                foreground,
+                size,
+                margin,
+                columns,
+                showBulkValue,
+              });
+
+        if (offset > 0) pdf.addPage();
+
+        const scale = Math.min(
+          usableWidthMm / pageCanvas.width,
+          usableHeightMm / pageCanvas.height
+        );
+        const renderedWidthMm = pageCanvas.width * scale;
+        const renderedHeightMm = pageCanvas.height * scale;
+        const x = (pageWidthMm - renderedWidthMm) / 2;
+
+        pdf.addImage(
+          pageCanvas.toDataURL("image/png"),
+          "PNG",
+          x,
+          marginMm,
+          renderedWidthMm,
+          renderedHeightMm
+        );
+      }
+
+      pdf.save(
+        bulkType === "qr"
+          ? "bardata-bulk-qr.pdf"
+          : "bardata-bulk-barcodes.pdf"
+      );
     } catch (err) {
       console.error("PDF export failed:", err);
       setError("Could not export PDF. Check the barcode value and format.");
@@ -905,32 +1290,34 @@ export default function BarcodeQrGeneratorApp() {
   };
 
   return (
-    <main className="soft-texture relative min-h-screen overflow-clip bg-[var(--app-bg)] font-sans text-[var(--app-text)] transition-colors duration-300">
+    <main className="soft-texture relative h-[100dvh] overflow-hidden bg-[var(--app-bg)] font-sans text-[var(--app-text)] transition-colors duration-300">
       <style jsx global>{`
         /* ── Design tokens ─────────────────────────────────────────────── */
         :root {
-          --app-bg: #f8f8f8;
-          --app-surface: #ffffff;
-          --app-surface-2: rgba(255, 255, 255, 0.70);
-          --app-panel: rgba(255, 255, 255, 0.80);
-          --app-text: #1a1100;
-          --app-muted: #7a6a48;
-          --app-border: rgba(0, 0, 0, 0.10);
-          --app-accent: #c49000;
-          --app-accent-soft: rgba(196, 144, 0, 0.08);
+          --app-bg: #eeeeeb;
+          --app-surface: #fbfaf6;
+          --app-surface-2: #f1efe8;
+          --app-panel: #fbfaf6;
+          --app-text: #171713;
+          --app-muted: #747168;
+          --app-border: #d5d1c5;
+          --app-accent: #f5c800;
+          --app-accent-soft: rgba(245, 200, 0, 0.16);
+          --preview-grid: rgba(23, 23, 19, 0.025);
         }
 
         @media (prefers-color-scheme: dark) {
           :root {
-            --app-bg: #0b0b0b;
-            --app-surface: #141414;
-            --app-surface-2: #1a1a1a;
-            --app-panel: #232323;
-            --app-text: #f5f5f3;
-            --app-muted: #9a9a96;
-            --app-border: rgba(245, 245, 243, 0.10);
+            --app-bg: #0d0d0c;
+            --app-surface: #161614;
+            --app-surface-2: #1e1e1b;
+            --app-panel: #161614;
+            --app-text: #f4f2eb;
+            --app-muted: #98958a;
+            --app-border: #32312c;
             --app-accent: #ffd60a;
-            --app-accent-soft: rgba(255, 214, 10, 0.12);
+            --app-accent-soft: rgba(255, 214, 10, 0.16);
+            --preview-grid: rgba(255, 255, 255, 0.02);
           }
         }
 
@@ -1017,82 +1404,45 @@ export default function BarcodeQrGeneratorApp() {
           transform: rotate(45deg);
         }
 
-        /* ── Liquid-glass card ─────────────────────────────────────────── */
-        /*  Top-left highlight + subtle refraction tint + strong blur      */
         .glass-card {
-          background: linear-gradient(
-            145deg,
-            rgba(255, 255, 255, 0.26) 0%,
-            rgba(255, 255, 255, 0.10) 100%
-          );
-          backdrop-filter: blur(44px) saturate(170%) brightness(1.06);
-          -webkit-backdrop-filter: blur(44px) saturate(170%) brightness(1.06);
-          border: 1px solid rgba(255, 255, 255, 0.48);
+          background: var(--app-surface);
+          border: 1px solid var(--app-border);
           box-shadow:
-            inset 0 1.5px 0 rgba(255, 255, 255, 0.72),   /* top specular */
-            inset 1px 0   0 rgba(255, 255, 255, 0.22),   /* left edge   */
-            inset 0 -1px  0 rgba(0,   0,   0,   0.06),   /* bottom rim  */
-            0  4px 16px rgba(15, 23, 42, 0.08),
-            0 16px 48px rgba(15, 23, 42, 0.10);
+            0 1px 0 rgba(255, 255, 255, 0.6) inset,
+            0 8px 24px rgba(32, 29, 18, 0.07);
         }
 
         @media (prefers-color-scheme: dark) {
           .glass-card {
-            background: #141414;
-            backdrop-filter: none;
-            -webkit-backdrop-filter: none;
-            border: 1px solid rgba(245, 245, 243, 0.10);
-            box-shadow:
-              0  4px 16px rgba(0, 0, 0, 0.40),
-              0 20px 60px rgba(0, 0, 0, 0.50);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
           }
         }
 
-        /* ── Inner preview glass panel ─────────────────────────────────── */
         .glass-inner {
-          background: rgba(255, 255, 255, 0.14);
-          backdrop-filter: blur(36px) saturate(160%);
-          -webkit-backdrop-filter: blur(36px) saturate(160%);
-          border: 1px solid rgba(255, 255, 255, 0.40);
-          box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.60),
-            inset 0 0 40px rgba(255, 255, 255, 0.05),
-            0 2px 12px rgba(15, 23, 42, 0.06);
+          background-color: var(--app-surface-2);
+          background-image:
+            linear-gradient(var(--preview-grid) 1px, transparent 1px),
+            linear-gradient(90deg, var(--preview-grid) 1px, transparent 1px);
+          background-size: 22px 22px;
+          border: 1px solid var(--app-border);
         }
 
-        @media (prefers-color-scheme: dark) {
-          .glass-inner {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.10);
-            box-shadow:
-              inset 0 1px 0 rgba(255, 255, 255, 0.14),
-              inset 0 0 40px rgba(0, 0, 0, 0.12),
-              0 2px 12px rgba(0, 0, 0, 0.30);
-          }
-        }
-
-        /* ── Gradient-mesh background ──────────────────────────────────── */
-        /*  All blobs stay in the cyan → sky → blue → teal brand palette   */
         .soft-texture {
           background-color: var(--app-bg);
           background-image:
-            radial-gradient(ellipse 74% 62% at 10% 14%, rgba(255, 194,   0, 0.02), transparent),
-            radial-gradient(ellipse 60% 52% at 86% 11%, rgba(245, 158,  11, 0.02), transparent),
-            radial-gradient(ellipse 62% 54% at 18% 78%, rgba(234, 179,   8, 0.02), transparent),
-            radial-gradient(ellipse 54% 48% at 72% 52%, rgba(253, 224,  71, 0.01), transparent),
-            radial-gradient(ellipse 42% 38% at 46% 40%, rgba(255, 194,   0, 0.01), transparent),
-            radial-gradient(ellipse 38% 32% at 92% 90%, rgba(217, 119,   6, 0.01), transparent);
+            radial-gradient(circle at 12% 0%, rgba(245, 200, 0, 0.025), transparent 28%),
+            linear-gradient(rgba(23, 23, 19, 0.018) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(23, 23, 19, 0.018) 1px, transparent 1px);
+          background-size: auto, 32px 32px, 32px 32px;
         }
 
         @media (prefers-color-scheme: dark) {
           .soft-texture {
             background-image:
-              radial-gradient(ellipse 74% 62% at 10% 14%, rgba(255, 194,   0, 0.04), transparent),
-              radial-gradient(ellipse 60% 52% at 86% 11%, rgba(245, 158,  11, 0.03), transparent),
-              radial-gradient(ellipse 62% 54% at 18% 78%, rgba(234, 179,   8, 0.03), transparent),
-              radial-gradient(ellipse 54% 48% at 72% 52%, rgba(253, 224,  71, 0.02), transparent),
-              radial-gradient(ellipse 42% 38% at 46% 40%, rgba(255, 194,   0, 0.02), transparent),
-              radial-gradient(ellipse 38% 32% at 92% 90%, rgba(217, 119,   6, 0.02), transparent);
+              radial-gradient(circle at 12% 0%, rgba(255, 214, 10, 0.03), transparent 28%),
+              linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+            background-size: auto, 32px 32px, 32px 32px;
           }
         }
 
@@ -1113,32 +1463,54 @@ export default function BarcodeQrGeneratorApp() {
           .soft-texture::before { opacity: 0.055; }
         }
 
-        /* ── Bulk grid ─────────────────────────────────────────────────── */
-        .bulk-grid { grid-template-columns: 1fr; }
+        .settings-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: var(--app-border) transparent;
+        }
 
-        @media (min-width: 768px) {
-          .bulk-grid {
-            grid-template-columns: repeat(var(--bulk-columns), minmax(0, 1fr));
+        .data-dock textarea {
+          min-height: 82px;
+          max-height: 104px;
+        }
+
+        .bulk-grid {
+          grid-template-columns: repeat(var(--bulk-columns), minmax(0, 1fr));
+        }
+
+        @media (max-height: 700px) and (max-width: 1023px) {
+          .data-dock {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+          }
+
+          .data-dock > :first-child,
+          .data-dock > :last-child {
+            grid-column: 1 / -1;
+          }
+
+          .data-dock textarea {
+            min-height: 68px;
+            max-height: 68px;
           }
         }
       `}</style>
 
-      <section className="relative mx-auto flex min-h-screen w-full max-w-[1800px] flex-col overflow-clip px-4 py-4 sm:px-5 lg:px-7 xl:min-h-0 xl:px-8">
+      <section className="relative mx-auto flex h-[100dvh] w-full max-w-[1920px] flex-col overflow-hidden p-2 sm:p-3 lg:p-4">
         <motion.header
-          initial={{ opacity: 0, y: 14 }}
+          initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-          className="glass-card relative z-10 mb-4 rounded-[1.5rem] p-4 lg:p-5"
+          transition={{ duration: 0.25 }}
+          className="glass-card relative z-10 mb-2 flex h-14 shrink-0 items-center justify-between rounded-2xl px-3 sm:mb-3 sm:h-16 sm:px-4"
         >
-          <nav className="mb-4 flex items-center justify-between gap-4">
-            <div className="inline-flex items-center gap-2.5 rounded-full border border-[var(--app-border)] bg-[var(--app-surface)] px-3.5 py-2 text-sm font-black text-[var(--app-text)]">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#11110f] text-white ring-1 ring-black/10 dark:bg-[#ffd60a] dark:text-[#11110f]">
               <svg
-                width="34"
-                height="34"
+                width="26"
+                height="26"
                 viewBox="0 0 32 32"
                 fill="none"
                 aria-hidden="true"
-                className="shrink-0"
               >
                 <rect x="3" y="6" width="3" height="20" rx="1" fill="currentColor" />
                 <rect x="8" y="6" width="1.8" height="20" rx="0.9" fill="currentColor" />
@@ -1146,73 +1518,53 @@ export default function BarcodeQrGeneratorApp() {
                 <rect x="18" y="6" width="2" height="20" rx="1" fill="currentColor" />
                 <rect x="23" y="6" width="6" height="20" rx="1" fill="var(--app-accent)" />
               </svg>
-              <span className="flex flex-col leading-tight">
-                <span>BarData</span>
-                <span className="text-[10px] font-medium opacity-60">by tcfella.com</span>
-              </span>
             </div>
-
-            <div className="hidden items-center gap-2 rounded-full border border-[var(--app-border)] bg-[var(--app-surface-2)] px-4 py-2 text-xs font-bold text-[var(--app-muted)] sm:flex">
-              <span className="h-2 w-2 rounded-full bg-[var(--app-accent)]" />
-              Client-side · free · no sign-up
-            </div>
-          </nav>
-
-          <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr] lg:items-end">
-            <div className="space-y-3">
-              <div className="inline-flex rounded-full border border-[var(--app-border)] bg-[var(--app-surface-2)] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--app-muted)]">
-                QR · Barcode · Bulk sheets
+            <div className="min-w-0">
+              <div className="flex items-baseline gap-2">
+                <span className="text-base font-black tracking-[-0.03em] sm:text-lg">BarData</span>
+                <span className="hidden text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--app-muted)] sm:inline">
+                  Generator workspace
+                </span>
               </div>
-
-              <h1 className="max-w-3xl text-balance text-2xl font-black leading-tight tracking-[-0.03em] text-[var(--app-text)] md:text-3xl">
-                Generate codes that are ready to scan, print, and share.
-              </h1>
-
-              <p className="max-w-2xl text-sm leading-6 text-[var(--app-muted)] md:text-base">
-                A polished QR and barcode tool for labels, SKUs, product sheets,
-                inventory workflows, Wi-Fi, links, emails, and quick exports.
+              <p className="truncate text-[10px] font-medium text-[var(--app-muted)] sm:text-xs">
+                Your data stays in this browser
               </p>
             </div>
+          </div>
 
-            <div className="grid grid-cols-3 gap-2 rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-2 backdrop-blur-xl">
-              <div className="rounded-xl bg-[var(--app-surface)] p-2.5 text-center">
-                <div className="text-base font-black text-[var(--app-text)]">PNG</div>
-                <div className="text-[10px] font-semibold text-[var(--app-muted)]">
-                  Export
-                </div>
-              </div>
-              <div className="rounded-xl bg-[var(--app-surface)] p-2.5 text-center">
-                <div className="text-base font-black text-[var(--app-text)]">SVG</div>
-                <div className="text-[10px] font-semibold text-[var(--app-muted)]">
-                  Vector
-                </div>
-              </div>
-              <div className="rounded-xl bg-[var(--app-surface)] p-2.5 text-center">
-                <div className="text-base font-black text-[var(--app-text)]">PDF</div>
-                <div className="text-[10px] font-semibold text-[var(--app-muted)]">
-                  Bulk
-                </div>
-              </div>
+          <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 rounded-full border border-[var(--app-border)] bg-[var(--app-surface-2)] px-3 py-1.5 text-[11px] font-bold text-[var(--app-muted)] md:flex">
+              <span className="size-1.5 rounded-full bg-emerald-500" />
+              Ready to export
             </div>
+            <a
+              href="https://tcfella.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg px-2 py-1.5 text-xs font-bold text-[var(--app-muted)] transition hover:bg-[var(--app-surface-2)] hover:text-[var(--app-text)]"
+            >
+              tcfella.com
+            </a>
           </div>
         </motion.header>
 
-        <div className="relative z-10 grid flex-1 gap-4 xl:grid-cols-[0.72fr_1.28fr] xl:items-start">
+        <div className="relative z-10 grid min-h-0 flex-1 grid-rows-[minmax(250px,1.05fr)_minmax(180px,0.95fr)] gap-2 sm:gap-3 lg:grid-cols-[minmax(360px,0.72fr)_minmax(0,1.28fr)] lg:grid-rows-[minmax(0,1fr)]">
           <motion.div
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="min-h-0 min-w-0 xl:sticky xl:top-4 xl:self-start"
+            className="min-h-0 min-w-0"
           >
-            <Card className="glass-card h-auto overflow-hidden rounded-[2rem]">
-              <CardContent className="h-auto p-4 md:p-5 xl:p-6">
-                <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-2 rounded-[1.5rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-1.5 backdrop-blur-xl sm:p-2">
+            <Card className="glass-card h-full overflow-hidden rounded-2xl py-0 sm:rounded-3xl">
+              <CardContent className="flex h-full min-h-0 flex-col p-3 sm:p-4 lg:p-5">
+                <div className="flex h-full min-h-0 flex-col gap-3">
+                  <div className="data-dock shrink-0 space-y-3">
+                  <div className="grid grid-cols-3 gap-1 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-2)] p-1">
                     <button
                       onClick={() => setMode("qr")}
-                      className={`flex items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs font-bold transition sm:px-3 sm:text-sm ${
+                      className={`flex items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs font-bold transition sm:px-3 sm:text-sm ${
                         mode === "qr"
-                          ? "bg-[var(--app-accent-soft)] text-[var(--app-text)] shadow-sm ring-1 ring-[var(--app-accent)]/40"
+                          ? "bg-[var(--app-accent)] text-[#17150d] shadow-sm"
                           : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
                       }`}
                     >
@@ -1221,9 +1573,9 @@ export default function BarcodeQrGeneratorApp() {
 
                     <button
                       onClick={() => setMode("barcode")}
-                      className={`flex items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs font-bold transition sm:px-3 sm:text-sm ${
+                      className={`flex items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs font-bold transition sm:px-3 sm:text-sm ${
                         mode === "barcode"
-                          ? "bg-[var(--app-accent-soft)] text-[var(--app-text)] shadow-sm ring-1 ring-[var(--app-accent)]/40"
+                          ? "bg-[var(--app-accent)] text-[#17150d] shadow-sm"
                           : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
                       }`}
                     >
@@ -1232,9 +1584,9 @@ export default function BarcodeQrGeneratorApp() {
 
                     <button
                       onClick={() => setMode("bulk")}
-                      className={`flex items-center justify-center gap-2 rounded-xl px-2 py-3 text-xs font-bold transition sm:px-3 sm:text-sm ${
+                      className={`flex items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs font-bold transition sm:px-3 sm:text-sm ${
                         mode === "bulk"
-                          ? "bg-[var(--app-accent-soft)] text-[var(--app-text)] shadow-sm ring-1 ring-[var(--app-accent)]/40"
+                          ? "bg-[var(--app-accent)] text-[#17150d] shadow-sm"
                           : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
                       }`}
                     >
@@ -1243,12 +1595,12 @@ export default function BarcodeQrGeneratorApp() {
                   </div>
 
                   {mode === "bulk" && (
-                    <div className="grid grid-cols-2 gap-2 rounded-[1.25rem] border border-[var(--app-border)] bg-[var(--app-surface-2)]/70 p-1.5 backdrop-blur-xl">
+                    <div className="grid grid-cols-2 gap-1 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface-2)] p-1">
                       <button
                         onClick={() => setBulkType("barcode")}
-                        className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition ${
+                        className={`flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
                           bulkType === "barcode"
-                            ? "bg-[var(--app-accent-soft)] text-[var(--app-text)] shadow-sm ring-1 ring-[var(--app-accent)]/40"
+                          ? "bg-[var(--app-accent)] text-[#17150d] shadow-sm"
                             : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
                         }`}
                       >
@@ -1256,9 +1608,9 @@ export default function BarcodeQrGeneratorApp() {
                       </button>
                       <button
                         onClick={() => setBulkType("qr")}
-                        className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition ${
+                        className={`flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold transition ${
                           bulkType === "qr"
-                            ? "bg-[var(--app-accent-soft)] text-[var(--app-text)] shadow-sm ring-1 ring-[var(--app-accent)]/40"
+                          ? "bg-[var(--app-accent)] text-[#17150d] shadow-sm"
                             : "text-[var(--app-muted)] hover:bg-[var(--app-surface)]"
                         }`}
                       >
@@ -1274,7 +1626,7 @@ export default function BarcodeQrGeneratorApp() {
                       </label>
                       <select
                         onChange={(e) => setValue(e.target.value)}
-                        className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]"
+                        className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]"
                         defaultValue=""
                       >
                         <option value="" disabled>
@@ -1297,7 +1649,7 @@ export default function BarcodeQrGeneratorApp() {
                       <select
                         value={barcodeFormat}
                         onChange={(e) => setBarcodeFormat(e.target.value)}
-                        className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]"
+                        className="w-full rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2 text-sm text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]"
                       >
                         {barcodeFormats.map((format) => (
                           <option key={format.value} value={format.value}>
@@ -1326,8 +1678,8 @@ export default function BarcodeQrGeneratorApp() {
                         value={value}
                         onChange={(e) => setValue(e.target.value)}
                         rows={4}
-                        placeholder="Enter URL, text, SKU, product ID, phone, email, Wi-Fi string..."
-                        className="w-full resize-none rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-[var(--app-text)] outline-none placeholder:text-[var(--app-muted)] focus:border-[var(--app-accent)]"
+                        placeholder={singleExampleValue}
+                        className="w-full resize-none rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2.5 text-xs leading-5 text-[var(--app-text)] outline-none placeholder:text-[var(--app-muted)] focus:border-[var(--app-accent)]"
                       />
                     </div>
                   ) : (
@@ -1337,46 +1689,56 @@ export default function BarcodeQrGeneratorApp() {
                           {bulkType === "qr" ? "Bulk QR values" : "Bulk barcode values"}
                         </label>
                         <span className="text-xs font-medium text-[var(--app-muted)]">
-                          {bulkItems.length} item{bulkItems.length === 1 ? "" : "s"}
+                          {usingBulkExamples
+                            ? `${bulkItems.length} examples`
+                            : `${bulkItems.length} item${bulkItems.length === 1 ? "" : "s"}`}
                         </span>
                       </div>
                       <textarea
                         value={bulkValues}
                         onChange={(e) => setBulkValues(e.target.value)}
                         rows={6}
-                        placeholder={
-                          bulkType === "qr"
-                            ? "Paste one value per line.\nhttps://example.com\nmailto:hello@example.com\nHello, World!"
-                            : "Paste one barcode value per line.\nSKU-1001\nSKU-1002\nSKU-1003"
-                        }
-                        className="w-full resize-none rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-[var(--app-text)] outline-none placeholder:text-[var(--app-muted)] focus:border-[var(--app-accent)]"
+                        placeholder={bulkPlaceholder}
+                        className="w-full resize-none rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] px-3 py-2.5 text-xs leading-5 text-[var(--app-text)] outline-none placeholder:text-[var(--app-muted)] focus:border-[var(--app-accent)]"
                       />
-                      <p className="text-xs leading-5 text-[var(--app-muted)]">
+                      <p className="hidden text-xs leading-5 text-[var(--app-muted)] lg:block">
                         {bulkType === "qr"
                           ? "QR codes support URLs, plain text, email, phone, Wi-Fi strings, and more."
                           : "For mixed letters/numbers, use CODE128. EAN-13, UPC, and ITF-14 require specific digit lengths."}
                       </p>
                     </div>
                   )}
+                  </div>
+
+                  <div className="settings-scroll min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+                    <div className="flex items-center justify-between border-b border-[var(--app-border)] pb-2">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--app-text)]">
+                          Customize
+                        </p>
+                        <p className="text-[10px] text-[var(--app-muted)]">
+                          Color, size, spacing, and sheet options
+                        </p>
+                      </div>
+                      <button
+                        onClick={reset}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold text-[var(--app-muted)] transition hover:bg-[var(--app-surface-2)] hover:text-[var(--app-text)]"
+                      >
+                        <RotateCcw className="size-3.5" />
+                        Reset
+                      </button>
+                    </div>
 
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="space-y-2">
                       <label className="text-sm font-bold text-[var(--app-text)]">
                         Foreground
                       </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="color"
-                          value={foreground}
-                          onChange={(e) => setForeground(e.target.value)}
-                          className="h-11 w-14 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1"
-                        />
-                        <input
-                          value={foreground}
-                          onChange={(e) => setForeground(e.target.value)}
-                          className="min-w-0 flex-1 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2.5 text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]"
-                        />
-                      </div>
+                      <ColorControl
+                        label="Foreground"
+                        value={foreground}
+                        onChange={setForeground}
+                      />
                     </div>
 
                     <div className="space-y-2">
@@ -1410,19 +1772,11 @@ export default function BarcodeQrGeneratorApp() {
                         </button>
                       </div>
                       {background !== "transparent" && (
-                        <div className="flex gap-2">
-                          <input
-                            type="color"
-                            value={background}
-                            onChange={(e) => setBackground(e.target.value)}
-                            className="h-11 w-14 rounded-xl border border-[var(--app-border)] bg-[var(--app-surface)] p-1"
-                          />
-                          <input
-                            value={background}
-                            onChange={(e) => setBackground(e.target.value)}
-                            className="min-w-0 flex-1 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-2.5 text-[var(--app-text)] outline-none focus:border-[var(--app-accent)]"
-                          />
-                        </div>
+                        <ColorControl
+                          label="Background"
+                          value={background}
+                          onChange={setBackground}
+                        />
                       )}
                     </div>
                   </div>
@@ -1516,46 +1870,6 @@ export default function BarcodeQrGeneratorApp() {
                     </p>
                   )}
 
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <Button
-                      onClick={downloadPng}
-                      className="rounded-2xl bg-[var(--app-accent-soft)] px-4 font-bold text-[var(--app-text)] ring-1 ring-[var(--app-accent)]/40 hover:bg-[var(--app-accent)]/20"
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      {mode === "bulk" ? (bulkType === "qr" ? "Sheet PNG" : "Sheet PNG") : "PNG"}
-                    </Button>
-
-                    <Button
-                      onClick={downloadSvg}
-                      variant="secondary"
-                      className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 font-bold text-[var(--app-text)] hover:bg-[var(--app-surface-2)]"
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      {mode === "bulk" ? "Sheet SVG" : "SVG"}
-                    </Button>
-
-                    {mode === "bulk" && (
-                      <>
-                        <Button
-                          onClick={downloadBulkPdf}
-                          variant="secondary"
-                          className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 font-bold text-[var(--app-text)] hover:bg-[var(--app-surface-2)]"
-                        >
-                          <FileText className="mr-2 h-4 w-4" />
-                          PDF
-                        </Button>
-
-                      </>
-                    )}
-
-                    <Button
-                      onClick={reset}
-                      variant="ghost"
-                      className="rounded-2xl px-4 font-bold text-[var(--app-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-text)]"
-                    >
-                      <RotateCcw className="mr-2 h-4 w-4" />
-                      Reset
-                    </Button>
                   </div>
                 </div>
               </CardContent>
@@ -1566,37 +1880,68 @@ export default function BarcodeQrGeneratorApp() {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.05 }}
-            className="min-h-0 min-w-0 xl:flex xl:flex-col xl:self-stretch"
+            className="min-h-0 min-w-0"
           >
-            <Card className="glass-card h-auto overflow-hidden rounded-[2rem] xl:flex xl:h-full xl:flex-col">
-              <CardContent className="flex h-auto flex-col gap-4 p-4 md:p-5 xl:flex-1 xl:p-6">
-                <div className="flex shrink-0 flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                  <div>
-                    <h2 className="text-2xl font-black tracking-[-0.03em] text-[var(--app-text)] md:text-3xl">
-                      Live preview
-                    </h2>
-                    <p className="mt-1 text-sm text-[var(--app-muted)]">
-                      Scroll this preview area while your data panel stays still.
-                    </p>
+            <Card className="glass-card flex h-full flex-col overflow-hidden rounded-2xl py-0 sm:rounded-3xl">
+              <CardContent className="flex h-full min-h-0 flex-col gap-2 p-3 sm:gap-3 sm:p-4 lg:p-5">
+                <div className="flex shrink-0 items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 shrink-0 rounded-full bg-[var(--app-accent)] shadow-[0_0_0_4px_var(--app-accent-soft)]" />
+                      <h2 className="text-sm font-black tracking-[-0.02em] text-[var(--app-text)] sm:text-base">
+                        Live preview
+                      </h2>
+                      <span className="hidden truncate text-[11px] font-semibold text-[var(--app-muted)] sm:inline">
+                        {mode === "bulk"
+                          ? `${bulkItems.length} ${bulkType === "qr" ? "QR codes" : "barcodes"} · ${columns} columns${usingBulkExamples ? " · examples" : ""}`
+                          : mode === "qr"
+                            ? `QR code${value.trim() ? "" : " · example"}`
+                            : `${barcodeFormat}${value.trim() ? "" : " · example"}`}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="w-full rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-sm text-[var(--app-muted)] md:w-auto">
-                    {mode === "bulk"
-                      ? `${bulkItems.length} bulk ${bulkType === "qr" ? "QR codes" : "barcodes"}`
-                      : mode === "qr"
-                        ? "QR export"
-                        : `${barcodeFormat} export`}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button
+                      onClick={downloadPng}
+                      size="sm"
+                      className="h-8 rounded-lg bg-[var(--app-accent)] px-2.5 text-xs font-black text-[#17150d] hover:bg-[var(--app-accent)]/80"
+                    >
+                      <Download className="size-3.5" />
+                      PNG
+                    </Button>
+                    <Button
+                      onClick={downloadSvg}
+                      size="sm"
+                      variant="outline"
+                      className="h-8 rounded-lg border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs font-black text-[var(--app-text)]"
+                    >
+                      SVG
+                    </Button>
+                    {mode === "bulk" && (
+                      <Button
+                        onClick={downloadBulkPdf}
+                        size="sm"
+                        variant="outline"
+                        className="h-8 rounded-lg border-[var(--app-border)] bg-[var(--app-surface)] px-2.5 text-xs font-black text-[var(--app-text)]"
+                      >
+                        <FileText className="size-3.5" />
+                        PDF
+                      </Button>
+                    )}
                   </div>
                 </div>
 
                 <div
                   ref={previewContainerRef}
-                  className="glass-inner min-h-[560px] flex-1 overflow-x-hidden overflow-y-auto rounded-[2rem] p-3 md:min-h-[680px] md:p-5 xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:p-7"
+                  className="glass-inner flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto rounded-xl p-2 sm:rounded-2xl sm:p-3 lg:p-4"
                 >
                   {mode !== "bulk" ? (
                     <div
                       ref={previewRef}
-                      className="flex min-h-[520px] w-full items-center justify-center rounded-[1.65rem] p-6 shadow-sm md:min-h-[680px] md:p-8 xl:min-h-0 xl:flex-1"
+                      className={`flex min-h-0 w-full flex-1 items-center justify-center rounded-lg p-3 sm:rounded-xl sm:p-5 ${
+                        background === "transparent" ? "shadow-none" : "shadow-sm"
+                      }`}
                       style={{ backgroundColor: background }}
                     >
                       {mode === "qr" ? (
@@ -1604,7 +1949,7 @@ export default function BarcodeQrGeneratorApp() {
                           <img
                             src={qrDataUrl}
                             alt="Generated QR code"
-                            className="h-auto w-full max-w-[min(480px,90%)] xl:max-h-[70vh] xl:w-auto xl:max-w-[min(480px,90%)]"
+                            className="h-auto max-h-full w-auto max-w-full object-contain"
                           />
                         ) : (
                           <div className="text-center text-slate-500">
@@ -1612,7 +1957,7 @@ export default function BarcodeQrGeneratorApp() {
                           </div>
                         )
                       ) : (
-                        <div className="w-full max-w-[680px]">
+                        <div className="w-full max-w-[720px]">
                           <svg ref={barcodeRef} className="h-auto w-full max-w-full" />
                         </div>
                       )}
@@ -1620,7 +1965,9 @@ export default function BarcodeQrGeneratorApp() {
                   ) : (
                     <div
                       ref={bulkSheetRef}
-                      className="mx-auto w-full max-w-[1150px] rounded-[1.65rem] p-4 shadow-sm sm:p-5 md:p-7"
+                      className={`mx-auto w-full max-w-[1200px] rounded-lg p-2 sm:rounded-xl sm:p-4 ${
+                        background === "transparent" ? "shadow-none" : "shadow-sm"
+                      }`}
                       style={{ backgroundColor: background }}
                     >
                       {bulkItems.length ? (
@@ -1632,7 +1979,11 @@ export default function BarcodeQrGeneratorApp() {
                             bulkType === "qr" ? (
                               <div
                                 key={`${item}-${index}`}
-                                className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] p-3"
+                                className={`flex flex-col items-center justify-center gap-2 rounded-2xl border p-3 ${
+                                  background === "transparent"
+                                    ? "border-transparent bg-transparent"
+                                    : "border-[var(--app-border)] bg-[var(--app-surface)]"
+                                }`}
                               >
                                 {/* wrapper keeps the QR square regardless of container width */}
                                 <div className="aspect-square w-full">
@@ -1652,7 +2003,11 @@ export default function BarcodeQrGeneratorApp() {
                             ) : (
                               <div
                                 key={`${item}-${index}`}
-                                className="flex flex-col items-center justify-center rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3"
+                                className={`flex flex-col items-center justify-center rounded-2xl border px-4 py-3 ${
+                                  background === "transparent"
+                                    ? "border-transparent bg-transparent"
+                                    : "border-[var(--app-border)] bg-[var(--app-surface)]"
+                                }`}
                                 style={{ minHeight: Math.max(110, size * 0.42) + 36 + "px" }}
                               >
                                 <BarcodePreview
@@ -1683,27 +2038,6 @@ export default function BarcodeQrGeneratorApp() {
         </div>
       </section>
 
-      <footer className="relative z-10 w-full border-t border-[var(--app-border)] bg-[var(--app-panel)] backdrop-blur-3xl">
-        <div className="mx-auto flex max-w-[1800px] flex-col items-center justify-between gap-3 px-6 py-4 sm:flex-row sm:gap-2">
-          <p className="text-xs text-[var(--app-muted)]">
-            © {new Date().getFullYear()} BarData. All rights reserved.
-          </p>
-          <a
-            href="https://tcfella.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--app-border)] bg-[var(--app-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--app-muted)] transition hover:border-[var(--app-accent)] hover:text-[var(--app-text)]"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 585.61 501.84" className="h-4 w-4 shrink-0" aria-hidden="true">
-                <path fill="currentColor" d="M585.13,0v501.84s-83.04,0-83.04,0l-.18-250.85-83.5.03v-83.75s83.5.04,83.5.04l-.02-83.62h-250.79s-.03,83.61-.03,83.61h-83.66s-.01-83.61-.01-83.61H.5c-.78-1.29-.03-2.26-.02-3.56L.49,0h584.64Z"/>
-                <polygon fill="#ffc200" points="84.01 501.84 0 501.84 .11 418.28 83.83 418.28 84.01 501.84"/>
-                <polygon fill="#ffc200" points="251.08 167.29 418.41 167.26 418.41 251.01 251.22 251.01 251.18 418.25 418.29 418.28 418.57 501.84 167.53 501.84 167.42 167.29 251.08 167.29"/>
-                <rect fill="#ffc200" x="585.13" y="0" width=".48" height="501.84"/>
-              </svg>
-            by tcfella.com
-          </a>
-        </div>
-      </footer>
     </main>
   );
 }
