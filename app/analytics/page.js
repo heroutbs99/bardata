@@ -1,5 +1,5 @@
-import { headers } from "next/headers";
-import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import {
   Activity,
   ArrowUpRight,
@@ -7,11 +7,19 @@ import {
   CalendarDays,
   Eye,
   Globe2,
+  KeyRound,
   LockKeyhole,
+  LogOut,
+  Settings,
+  ShieldCheck,
   Users,
 } from "lucide-react";
-import { isAnalyticsAuthorized } from "@/lib/analytics-auth";
+import {
+  ANALYTICS_SESSION_COOKIE,
+  readAnalyticsSession,
+} from "@/lib/analytics-auth";
 import { getAnalyticsData } from "@/lib/posthog-analytics";
+import { changeCredentialsAction, logoutAction } from "./actions";
 import styles from "./analytics.module.css";
 
 export const dynamic = "force-dynamic";
@@ -76,6 +84,33 @@ function MetricCard({ icon: Icon, label, value, note }) {
   );
 }
 
+const securityMessages = {
+  saved: {
+    tone: "success",
+    text: "Your analytics username and password have been updated.",
+  },
+  "invalid-username": {
+    tone: "error",
+    text: "Use 3–64 letters, numbers, dots, dashes, underscores, or @ characters.",
+  },
+  "invalid-password": {
+    tone: "error",
+    text: "Your new password must be between 12 and 128 characters.",
+  },
+  "password-mismatch": {
+    tone: "error",
+    text: "The two new-password fields do not match.",
+  },
+  "current-password": {
+    tone: "error",
+    text: "Your current password is not correct.",
+  },
+  "storage-error": {
+    tone: "error",
+    text: "The credential change could not be saved. Please try again.",
+  },
+};
+
 function ConfigurationNotice({ missing }) {
   return (
     <main className={styles.centeredPage}>
@@ -95,12 +130,18 @@ function ConfigurationNotice({ missing }) {
   );
 }
 
-export default async function AnalyticsPage() {
-  const requestHeaders = await headers();
+export default async function AnalyticsPage({ searchParams }) {
+  const cookieStore = await cookies();
+  const session = readAnalyticsSession(
+    cookieStore.get(ANALYTICS_SESSION_COOKIE)?.value
+  );
 
-  if (!isAnalyticsAuthorized(requestHeaders.get("authorization"))) {
-    notFound();
+  if (!session) {
+    redirect("/analytics/login");
   }
+
+  const params = await searchParams;
+  const securityMessage = securityMessages[params?.security];
 
   const data = await getAnalyticsData();
 
@@ -130,10 +171,20 @@ export default async function AnalyticsPage() {
             <span>Private analytics</span>
           </div>
         </div>
-        <a className={styles.siteLink} href="https://www.bardata.app">
-          Open website
-          <ArrowUpRight aria-hidden="true" size={16} />
-        </a>
+        <div className={styles.headerActions}>
+          <a className={styles.siteLink} href="https://www.bardata.app">
+            Open website
+            <ArrowUpRight aria-hidden="true" size={16} />
+          </a>
+          <a className={styles.iconLink} href="#security" aria-label="Account settings">
+            <Settings aria-hidden="true" size={17} />
+          </a>
+          <form action={logoutAction}>
+            <button className={styles.iconButton} type="submit" aria-label="Sign out">
+              <LogOut aria-hidden="true" size={17} />
+            </button>
+          </form>
+        </div>
       </header>
 
       <section className={styles.intro}>
@@ -328,6 +379,89 @@ export default async function AnalyticsPage() {
           </section>
         </>
       )}
+
+      <section className={styles.securityPanel} id="security">
+        <div className={styles.securityIntro}>
+          <span className={styles.securityIcon}>
+            <ShieldCheck aria-hidden="true" size={23} />
+          </span>
+          <p className={styles.eyebrow}>Account security</p>
+          <h2>Change dashboard login</h2>
+          <p>
+            Update the username and password used to open this private
+            dashboard. Your new password is securely hashed before storage.
+          </p>
+          <div className={styles.signedInAs}>
+            <KeyRound aria-hidden="true" size={15} />
+            Signed in as <strong>{session.username}</strong>
+          </div>
+        </div>
+
+        <div className={styles.securityFormWrap}>
+          {securityMessage ? (
+            <div
+              className={
+                securityMessage.tone === "success"
+                  ? styles.formSuccess
+                  : styles.formError
+              }
+              role={securityMessage.tone === "success" ? "status" : "alert"}
+            >
+              {securityMessage.text}
+            </div>
+          ) : null}
+          <form action={changeCredentialsAction} className={styles.securityForm}>
+            <label className={styles.fullField}>
+              <span>Current password</span>
+              <input
+                name="currentPassword"
+                type="password"
+                autoComplete="current-password"
+                required
+              />
+            </label>
+            <label className={styles.fullField}>
+              <span>New username</span>
+              <input
+                name="username"
+                type="text"
+                defaultValue={session.username}
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck="false"
+                minLength={3}
+                maxLength={64}
+                required
+              />
+            </label>
+            <label>
+              <span>New password</span>
+              <input
+                name="newPassword"
+                type="password"
+                autoComplete="new-password"
+                minLength={12}
+                maxLength={128}
+                required
+              />
+            </label>
+            <label>
+              <span>Confirm new password</span>
+              <input
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                minLength={12}
+                maxLength={128}
+                required
+              />
+            </label>
+            <button type="submit" className={styles.saveButton}>
+              Save new login
+            </button>
+          </form>
+        </div>
+      </section>
 
       <footer className={styles.footer}>
         <span>Anonymous page-view analytics only</span>

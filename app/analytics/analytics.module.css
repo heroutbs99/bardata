@@ -1,5 +1,6 @@
 .dashboard,
-.centeredPage {
+.centeredPage,
+.loginPage {
   --ink: #111827;
   --muted: #6b7280;
   --line: #e5e7eb;
@@ -30,6 +31,7 @@
 .brandBlock,
 .brandBlock > div:last-child,
 .siteLink,
+.headerActions,
 .metricTopline,
 .panelHeading,
 .legend,
@@ -105,6 +107,43 @@
 
 .siteLink:hover {
   border-color: #b8bec8;
+  transform: translateY(-1px);
+}
+
+.headerActions {
+  gap: 8px;
+}
+
+.headerActions form {
+  margin: 0;
+}
+
+.iconLink,
+.iconButton {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: #525866;
+  background: rgba(255, 255, 255, 0.7);
+  transition: border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.iconLink {
+  text-decoration: none;
+}
+
+.iconButton {
+  cursor: pointer;
+  font: inherit;
+}
+
+.iconLink:hover,
+.iconButton:hover {
+  border-color: #b8bec8;
+  color: var(--ink);
   transform: translateY(-1px);
 }
 
@@ -559,6 +598,334 @@
   line-height: 1.7;
 }
 
+.loginPage {
+  padding: 28px;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(255, 196, 0, 0.17), transparent 34rem),
+    radial-gradient(circle at 100% 100%, rgba(17, 24, 39, 0.08), transparent 30rem),
+    #f4f5f7;
+}
+
+.loginShell {
+  width: min(1050px, 100%);
+  min-height: 650px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(390px, 0.92fr);
+  overflow: hidden;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.12);
+}
+
+.loginStory {
+  min-width: 0;
+  padding: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #fff;
+  background:
+    linear-gradient(145deg, rgba(255, 196, 0, 0.1), transparent 45%),
+    #111827;
+}
+
+.loginBrand,
+.loginBrand > div,
+.loginBenefits,
+.loginBenefits span,
+.signedInAs {
+  display: flex;
+}
+
+.loginBrand {
+  align-items: center;
+  gap: 13px;
+}
+
+.loginBrand .brandMark {
+  background: #fff;
+}
+
+.loginBrand .brandMark i {
+  background: #111827;
+}
+
+.loginBrand .brandMark i:last-child {
+  background: var(--accent);
+}
+
+.loginBrand > div {
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.loginBrand strong {
+  font-size: 18px;
+  letter-spacing: -0.03em;
+}
+
+.loginBrand span:last-child {
+  margin-top: 4px;
+  color: #a9b0bc;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.loginMessage {
+  max-width: 480px;
+  padding: 70px 0;
+}
+
+.loginMessage .eyebrow {
+  color: #f5c400;
+}
+
+.loginMessage h1 {
+  margin: 0;
+  font-size: clamp(39px, 5vw, 62px);
+  font-weight: 850;
+  letter-spacing: -0.06em;
+  line-height: 0.98;
+}
+
+.loginMessage > p:last-child {
+  max-width: 430px;
+  margin: 22px 0 0;
+  color: #b7bec9;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.loginBenefits {
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+
+.loginBenefits span {
+  align-items: center;
+  gap: 8px;
+  color: #cbd0d8;
+  font-size: 11px;
+}
+
+.loginBenefits svg {
+  color: var(--accent);
+}
+
+.loginCard {
+  padding: 58px 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.loginCardIcon,
+.securityIcon {
+  display: grid;
+  place-items: center;
+  color: #765800;
+  background: var(--accent-soft);
+}
+
+.loginCardIcon {
+  width: 46px;
+  height: 46px;
+  margin-bottom: 28px;
+  border-radius: 14px;
+}
+
+.loginCard .eyebrow {
+  margin-bottom: 7px;
+}
+
+.loginCard h2 {
+  margin: 0;
+  font-size: 36px;
+  font-weight: 850;
+  letter-spacing: -0.05em;
+}
+
+.loginSubtitle {
+  margin: 11px 0 27px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.loginForm,
+.securityForm {
+  display: grid;
+}
+
+.loginForm {
+  gap: 17px;
+}
+
+.loginForm label,
+.securityForm label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #434955;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.loginForm input,
+.securityForm input {
+  width: 100%;
+  height: 50px;
+  padding: 0 14px;
+  border: 1px solid #d9dde3;
+  border-radius: 12px;
+  outline: none;
+  color: var(--ink);
+  background: #fafbfc;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.loginForm input:focus,
+.securityForm input:focus {
+  border-color: #c99a00;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(255, 196, 0, 0.13);
+}
+
+.loginForm button,
+.saveButton {
+  min-height: 50px;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  color: #111827;
+  background: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 820;
+  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+.loginForm button {
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+
+.loginForm button:hover,
+.saveButton:hover {
+  background: #ffd02b;
+  box-shadow: 0 8px 20px rgba(170, 126, 0, 0.16);
+  transform: translateY(-1px);
+}
+
+.loginFootnote {
+  margin: 22px 0 0;
+  color: #969ca5;
+  font-size: 10px;
+  text-align: center;
+}
+
+.formError,
+.formSuccess {
+  margin-bottom: 17px;
+  padding: 11px 13px;
+  border: 1px solid;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.formError {
+  border-color: #fecaca;
+  color: #991b1b;
+  background: #fef2f2;
+}
+
+.formSuccess {
+  border-color: #bbf7d0;
+  color: #166534;
+  background: #f0fdf4;
+}
+
+.securityPanel {
+  width: min(1480px, 100%);
+  margin: 14px auto 0;
+  padding: 28px;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.68fr) minmax(420px, 1.32fr);
+  gap: 48px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.045);
+  scroll-margin-top: 20px;
+}
+
+.securityIntro {
+  max-width: 430px;
+}
+
+.securityIcon {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 20px;
+  border-radius: 13px;
+}
+
+.securityIntro h2 {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 840;
+  letter-spacing: -0.04em;
+}
+
+.securityIntro > p:not(.eyebrow) {
+  margin: 12px 0 20px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.signedInAs {
+  align-items: center;
+  gap: 7px;
+  color: #7f858e;
+  font-size: 10px;
+}
+
+.signedInAs strong {
+  color: #424854;
+}
+
+.securityForm {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.fullField,
+.saveButton {
+  grid-column: 1 / -1;
+}
+
+.saveButton {
+  width: fit-content;
+  min-width: 170px;
+  padding: 0 20px;
+  justify-self: end;
+}
+
 @media (max-width: 980px) {
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -567,6 +934,23 @@
   .primaryGrid,
   .secondaryGrid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .loginShell {
+    grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+  }
+
+  .loginStory {
+    padding: 36px;
+  }
+
+  .loginCard {
+    padding: 48px 38px;
+  }
+
+  .securityPanel {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
   }
 }
 
@@ -587,6 +971,52 @@
   .siteLink svg {
     width: 18px;
     height: 18px;
+  }
+
+  .loginPage {
+    padding: 14px;
+    align-items: start;
+  }
+
+  .loginShell {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    border-radius: 22px;
+  }
+
+  .loginStory {
+    min-height: 290px;
+    padding: 27px;
+  }
+
+  .loginMessage {
+    padding: 46px 0 36px;
+  }
+
+  .loginMessage h1 {
+    font-size: 39px;
+  }
+
+  .loginBenefits span:nth-child(2) {
+    display: none;
+  }
+
+  .loginCard {
+    padding: 38px 27px 34px;
+  }
+
+  .loginCardIcon {
+    margin-bottom: 22px;
+  }
+
+  .headerActions {
+    gap: 6px;
+  }
+
+  .iconLink,
+  .iconButton {
+    width: 38px;
+    height: 38px;
   }
 
   .intro {
@@ -630,5 +1060,23 @@
     flex-direction: column;
     justify-content: center;
     gap: 6px;
+  }
+
+  .securityPanel {
+    padding: 21px 17px;
+    gap: 24px;
+  }
+
+  .securityForm {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fullField,
+  .saveButton {
+    grid-column: auto;
+  }
+
+  .saveButton {
+    width: 100%;
   }
 }

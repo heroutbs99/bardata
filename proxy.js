@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
 import {
-  isAnalyticsAuthorized,
+  ANALYTICS_SESSION_COOKIE,
   isAnalyticsDashboardRequest,
+  isAnalyticsLoginRequest,
+  readAnalyticsSession,
 } from "./lib/analytics-auth";
 
-function authenticationRequired() {
-  return new NextResponse("Authentication required.", {
-    status: 401,
-    headers: {
-      "Cache-Control": "private, no-store",
-      "WWW-Authenticate": 'Basic realm="BarData Analytics", charset="UTF-8"',
-    },
-  });
+function loginRedirect(request) {
+  const url = new URL("/analytics/login", request.url);
+  return NextResponse.redirect(url, request.method === "GET" ? 307 : 303);
 }
 
 export function proxy(request) {
@@ -19,15 +16,20 @@ export function proxy(request) {
     return NextResponse.next();
   }
 
-  if (!process.env.ANALYTICS_PASSWORD) {
-    return new NextResponse("The analytics dashboard is not configured yet.", {
-      status: 503,
-      headers: { "Cache-Control": "private, no-store" },
-    });
+  const session = readAnalyticsSession(
+    request.cookies.get(ANALYTICS_SESSION_COOKIE)?.value
+  );
+
+  if (isAnalyticsLoginRequest(request)) {
+    if (session && request.method === "GET") {
+      return NextResponse.redirect(new URL("/analytics", request.url));
+    }
+
+    return NextResponse.next();
   }
 
-  if (!isAnalyticsAuthorized(request.headers.get("authorization"))) {
-    return authenticationRequired();
+  if (!session) {
+    return loginRedirect(request);
   }
 
   const host = request.headers.get("host")?.split(":")[0].toLowerCase();
