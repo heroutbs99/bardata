@@ -4,7 +4,6 @@
 /* eslint-disable @next/next/no-img-element */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
 import {
   Download,
   QrCode,
@@ -21,8 +20,6 @@ import { Card, CardContent } from "@/components/ui/card";
 
 import QRCode from "qrcode";
 import JsBarcode from "jsbarcode";
-
-import jsPDF from "jspdf";
 
 const barcodeFormats = [
   { label: "CODE128 — general text/SKU", value: "CODE128" },
@@ -1175,6 +1172,7 @@ export default function BarcodeQrGeneratorApp() {
     if (mode !== "bulk" || bulkErrors.length) return;
 
     try {
+      const { default: jsPDF } = await import("jspdf");
       const pdf = new jsPDF("p", "mm", "a4");
       const pageWidthMm = pdf.internal.pageSize.getWidth();
       const pageHeightMm = pdf.internal.pageSize.getHeight();
@@ -1497,12 +1495,7 @@ export default function BarcodeQrGeneratorApp() {
       `}</style>
 
       <section className="relative mx-auto flex h-[100dvh] w-full max-w-[1920px] flex-col overflow-hidden p-2 sm:p-3 lg:p-4">
-        <motion.header
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
-          className="glass-card relative z-10 mb-2 flex h-14 shrink-0 items-center justify-between rounded-2xl px-3 sm:mb-3 sm:h-16 sm:px-4"
-        >
+        <header className="glass-card relative z-10 mb-2 flex h-14 shrink-0 items-center justify-between rounded-2xl px-3 sm:mb-3 sm:h-16 sm:px-4">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#11110f] text-white ring-1 ring-black/10 dark:bg-[#ffd60a] dark:text-[#11110f]">
               <svg
@@ -1520,12 +1513,12 @@ export default function BarcodeQrGeneratorApp() {
               </svg>
             </div>
             <div className="min-w-0">
-              <div className="flex items-baseline gap-2">
+              <h1 className="flex items-baseline gap-2">
                 <span className="text-base font-black tracking-[-0.03em] sm:text-lg">BarData</span>
                 <span className="hidden text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--app-muted)] sm:inline">
-                  Generator workspace
+                  Free QR &amp; barcode generator
                 </span>
-              </div>
+              </h1>
               <p className="truncate text-[10px] font-medium text-[var(--app-muted)] sm:text-xs">
                 Your data stays in this browser
               </p>
@@ -1546,15 +1539,10 @@ export default function BarcodeQrGeneratorApp() {
               tcfella.com
             </a>
           </div>
-        </motion.header>
+        </header>
 
         <div className="relative z-10 grid min-h-0 flex-1 grid-rows-[minmax(250px,1.05fr)_minmax(180px,0.95fr)] gap-2 sm:gap-3 lg:grid-cols-[minmax(360px,0.72fr)_minmax(0,1.28fr)] lg:grid-rows-[minmax(0,1fr)]">
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35 }}
-            className="min-h-0 min-w-0"
-          >
+          <div className="min-h-0 min-w-0">
             <Card className="glass-card h-full overflow-hidden rounded-2xl py-0 sm:rounded-3xl">
               <CardContent className="flex h-full min-h-0 flex-col p-3 sm:p-4 lg:p-5">
                 <div className="flex h-full min-h-0 flex-col gap-3">
@@ -1870,18 +1858,75 @@ export default function BarcodeQrGeneratorApp() {
                     </p>
                   )}
 
+                  <section
+                    aria-labelledby="about-bardata"
+                    className="rounded-2xl border border-[var(--app-border)] bg-[var(--app-surface-2)] p-3 text-[11px] leading-5 text-[var(--app-muted)]"
+                  >
+                    <h2
+                      id="about-bardata"
+                      className="text-xs font-black text-[var(--app-text)]"
+                    >
+                      Free online QR code and barcode generator
+                    </h2>
+                    <p className="mt-1">
+                      Create single codes or bulk printable sheets directly in
+                      your browser. Customize size, margin, foreground, and
+                      background, then download PNG, SVG, or print-ready PDF
+                      files without an account.
+                    </p>
+
+                    <details className="mt-2 border-t border-[var(--app-border)] pt-2">
+                      <summary className="cursor-pointer font-bold text-[var(--app-text)]">
+                        How to generate codes
+                      </summary>
+                      <p className="mt-1">
+                        Choose QR, Single, or Bulk. Enter one value for a single
+                        code, or put one value on each line for a bulk sheet.
+                        The live preview updates as you type, and exports use
+                        the same values and settings shown on screen.
+                      </p>
+                    </details>
+
+                    <details className="mt-2 border-t border-[var(--app-border)] pt-2">
+                      <summary className="cursor-pointer font-bold text-[var(--app-text)]">
+                        Supported barcode formats
+                      </summary>
+                      <p className="mt-1">
+                        Use Code 128 for general text, SKUs, inventory, and
+                        shipping labels. BarData also supports EAN-13, UPC-A,
+                        Code 39, ITF-14, and MSI for retail, warehouse, and
+                        packaging workflows.
+                      </p>
+                    </details>
+
+                    <details className="mt-2 border-t border-[var(--app-border)] pt-2">
+                      <summary className="cursor-pointer font-bold text-[var(--app-text)]">
+                        Private by design
+                      </summary>
+                      <p className="mt-1">
+                        Code generation happens locally in your browser. The
+                        values you enter are not uploaded to a BarData server.
+                        The project is available on{` `}
+                        <a
+                          href="https://github.com/heroutbs99/bardata"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-bold text-[var(--app-text)] underline underline-offset-2"
+                        >
+                          GitHub
+                        </a>
+                        .
+                      </p>
+                    </details>
+                  </section>
+
                   </div>
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.05 }}
-            className="min-h-0 min-w-0"
-          >
+          <div className="min-h-0 min-w-0">
             <Card className="glass-card flex h-full flex-col overflow-hidden rounded-2xl py-0 sm:rounded-3xl">
               <CardContent className="flex h-full min-h-0 flex-col gap-2 p-3 sm:gap-3 sm:p-4 lg:p-5">
                 <div className="flex shrink-0 items-center justify-between gap-2">
@@ -2034,7 +2079,7 @@ export default function BarcodeQrGeneratorApp() {
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </div>
         </div>
       </section>
 
