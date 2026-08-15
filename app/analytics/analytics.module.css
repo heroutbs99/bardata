@@ -9,9 +9,16 @@
   --accent-soft: #fff7d6;
   min-height: 100vh;
   color: var(--ink);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   background:
     radial-gradient(circle at 14% 0%, rgba(255, 196, 0, 0.08), transparent 28rem),
     #f5f6f8;
+}
+
+.dashboard *,
+.centeredPage *,
+.loginPage * {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
 .dashboard {
@@ -404,7 +411,7 @@
 
 .pageRow > span {
   overflow: hidden;
-  font-family: var(--font-geist-mono);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   font-size: 12px;
   font-weight: 650;
   text-overflow: ellipsis;
@@ -502,7 +509,7 @@
 }
 
 .visitRow strong {
-  font-family: var(--font-geist-mono);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   font-size: 11px;
 }
 
