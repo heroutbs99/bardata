@@ -1,18 +1,12 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  Activity,
   ArrowUpRight,
-  BarChart3,
-  CalendarDays,
-  Eye,
-  Globe2,
   KeyRound,
   LockKeyhole,
   LogOut,
   Settings,
   ShieldCheck,
-  Users,
 } from "lucide-react";
 import {
   ANALYTICS_SESSION_COOKIE,
@@ -20,6 +14,7 @@ import {
 } from "@/lib/analytics-auth";
 import { getAnalyticsData } from "@/lib/posthog-analytics";
 import { changeCredentialsAction, logoutAction } from "./actions";
+import AnalyticsExplorer from "./AnalyticsExplorer";
 import styles from "./analytics.module.css";
 
 export const dynamic = "force-dynamic";
@@ -33,21 +28,6 @@ export const metadata = {
     nocache: true,
   },
 };
-
-const numberFormatter = new Intl.NumberFormat("en-CA");
-
-function formatNumber(value) {
-  return numberFormatter.format(value || 0);
-}
-
-function formatDay(date, options = {}) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Toronto",
-    month: "short",
-    day: "numeric",
-    ...options,
-  }).format(new Date(`${date}T12:00:00Z`));
-}
 
 function formatVisitTime(value) {
   const parsed = new Date(value);
@@ -63,25 +43,6 @@ function formatVisitTime(value) {
     hour: "numeric",
     minute: "2-digit",
   }).format(parsed);
-}
-
-function EmptyState({ children }) {
-  return <div className={styles.emptyState}>{children}</div>;
-}
-
-function MetricCard({ icon: Icon, label, value, note }) {
-  return (
-    <article className={styles.metricCard}>
-      <div className={styles.metricTopline}>
-        <span>{label}</span>
-        <span className={styles.metricIcon}>
-          <Icon aria-hidden="true" size={18} />
-        </span>
-      </div>
-      <strong>{formatNumber(value)}</strong>
-      <small>{note}</small>
-    </article>
-  );
 }
 
 const securityMessages = {
@@ -149,12 +110,6 @@ export default async function AnalyticsPage({ searchParams }) {
     return <ConfigurationNotice missing={data.missing} />;
   }
 
-  const daily = data.daily || [];
-  const maximumPageviews = Math.max(
-    1,
-    ...daily.map((entry) => entry.pageviews)
-  );
-
   return (
     <main className={styles.dashboard}>
       <header className={styles.header}>
@@ -205,180 +160,7 @@ export default async function AnalyticsPage({ searchParams }) {
         ) : null}
       </section>
 
-      {data.error ? (
-        <section className={styles.errorCard}>
-          <strong>Analytics is connected, but data could not be loaded.</strong>
-          <span>{data.error}</span>
-        </section>
-      ) : (
-        <>
-          <section className={styles.metrics} aria-label="Traffic summary">
-            <MetricCard
-              icon={Users}
-              label="Visitors today"
-              value={data.summary.visitorsToday}
-              note="Anonymous unique browsers"
-            />
-            <MetricCard
-              icon={Eye}
-              label="Page views today"
-              value={data.summary.pageviewsToday}
-              note="All tracked page loads"
-            />
-            <MetricCard
-              icon={Activity}
-              label="Last 7 days"
-              value={data.summary.pageviewsSevenDays}
-              note="Page views"
-            />
-            <MetricCard
-              icon={CalendarDays}
-              label="Last 30 days"
-              value={data.summary.pageviewsThirtyDays}
-              note="Page views"
-            />
-          </section>
-
-          <section className={styles.primaryGrid}>
-            <article className={styles.panel}>
-              <div className={styles.panelHeading}>
-                <div>
-                  <p className={styles.eyebrow}>30-day trend</p>
-                  <h2>Daily traffic</h2>
-                </div>
-                <div className={styles.legend}>
-                  <span><i className={styles.viewsKey} /> Page views</span>
-                  <span><i className={styles.visitorsKey} /> Visitors</span>
-                </div>
-              </div>
-
-              <div className={styles.chart} aria-label="Daily traffic chart">
-                {daily.map((entry, index) => (
-                  <div
-                    className={styles.chartDay}
-                    key={entry.date}
-                    title={`${formatDay(entry.date)}: ${entry.pageviews} page views, ${entry.visitors} visitors`}
-                  >
-                    <div className={styles.barTrack}>
-                      <i
-                        className={styles.visitorsBar}
-                        style={{
-                          height: `${Math.max(
-                            entry.visitors > 0 ? 4 : 0,
-                            (entry.visitors / maximumPageviews) * 100
-                          )}%`,
-                        }}
-                      />
-                      <i
-                        className={styles.viewsBar}
-                        style={{
-                          height: `${Math.max(
-                            entry.pageviews > 0 ? 6 : 0,
-                            (entry.pageviews / maximumPageviews) * 100
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                    <span>
-                      {index === 0 || index === daily.length - 1 || index % 7 === 0
-                        ? formatDay(entry.date, { month: undefined })
-                        : ""}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </article>
-
-            <article className={styles.panel}>
-              <div className={styles.panelHeading}>
-                <div>
-                  <p className={styles.eyebrow}>Last 30 days</p>
-                  <h2>Top pages</h2>
-                </div>
-                <Globe2 aria-hidden="true" size={20} />
-              </div>
-              {data.pages.length === 0 ? (
-                <EmptyState>No page views recorded yet.</EmptyState>
-              ) : (
-                <div className={styles.pageList}>
-                  {data.pages.map((page) => (
-                    <div className={styles.pageRow} key={page.pathname}>
-                      <span>{page.pathname}</span>
-                      <div>
-                        <strong>{formatNumber(page.pageviews)}</strong>
-                        <small>{formatNumber(page.visitors)} visitors</small>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </article>
-          </section>
-
-          <section className={styles.secondaryGrid}>
-            <article className={styles.panel}>
-              <div className={styles.panelHeading}>
-                <div>
-                  <p className={styles.eyebrow}>Daily breakdown</p>
-                  <h2>Visitors by day</h2>
-                </div>
-                <BarChart3 aria-hidden="true" size={20} />
-              </div>
-              <div className={styles.tableWrap}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Visitors</th>
-                      <th>Page views</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...daily].reverse().map((day) => (
-                      <tr key={day.date}>
-                        <td>{formatDay(day.date, { year: "numeric" })}</td>
-                        <td>{formatNumber(day.visitors)}</td>
-                        <td>{formatNumber(day.pageviews)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </article>
-
-            <article className={styles.panel}>
-              <div className={styles.panelHeading}>
-                <div>
-                  <p className={styles.eyebrow}>Latest activity</p>
-                  <h2>Recent page visits</h2>
-                </div>
-                <Activity aria-hidden="true" size={20} />
-              </div>
-              {data.recent.length === 0 ? (
-                <EmptyState>New visits will appear here.</EmptyState>
-              ) : (
-                <div className={styles.visitList}>
-                  {data.recent.map((visit, index) => (
-                    <div
-                      className={styles.visitRow}
-                      key={`${visit.visitedAt}-${visit.pathname}-${index}`}
-                    >
-                      <span className={styles.visitPulse} />
-                      <div>
-                        <strong>{visit.pathname}</strong>
-                        <small>
-                          {visit.browser} · {visit.device} · {visit.referrer}
-                        </small>
-                      </div>
-                      <time>{formatVisitTime(visit.visitedAt)}</time>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </article>
-          </section>
-        </>
-      )}
+      <AnalyticsExplorer data={data} />
 
       <section className={styles.securityPanel} id="security">
         <div className={styles.securityIntro}>
